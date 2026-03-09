@@ -43,11 +43,11 @@ type TaskCanvasNodeData = {
 
 type TaskCanvasFlowNode = Node<TaskCanvasNodeData, "taskNode">;
 
-const NODE_WIDTH = 290;
-const NODE_HEIGHT = 168;
-const HORIZONTAL_GAP = 340;
-const VERTICAL_GAP = 36;
-const ROOT_GAP = 72;
+const NODE_WIDTH = 258;
+const NODE_HEIGHT = 148;
+const HORIZONTAL_GAP = 302;
+const VERTICAL_GAP = 28;
+const ROOT_GAP = 52;
 
 function statusLabel(status: TaskStatus) {
   switch (status) {
@@ -207,12 +207,12 @@ function TaskCanvasNode({ data }: NodeProps<TaskCanvasFlowNode>) {
 
   return (
     <div
-      className={`group rounded-[26px] border px-5 py-4 text-left shadow-[0_24px_80px_rgba(0,0,0,0.38)] transition duration-200 ${
+      className={`group rounded-[20px] border px-4 py-3 text-left shadow-[0_18px_44px_rgba(0,0,0,0.28)] transition duration-200 ${
         selected
-          ? "border-white/20 bg-[linear-gradient(180deg,rgba(16,24,48,0.98),rgba(10,16,34,0.94))]"
+          ? "border-white/16 bg-[linear-gradient(180deg,rgba(18,24,40,0.98),rgba(12,16,29,0.96))]"
           : task.matched_filter
-            ? "border-white/[0.1] bg-[linear-gradient(180deg,rgba(10,16,34,0.92),rgba(7,11,24,0.88))]"
-            : "border-dashed border-white/[0.08] bg-[linear-gradient(180deg,rgba(9,14,28,0.72),rgba(7,11,24,0.68))]"
+            ? "border-white/[0.08] bg-[linear-gradient(180deg,rgba(15,19,31,0.96),rgba(11,14,24,0.9))]"
+            : "border-dashed border-white/[0.06] bg-[linear-gradient(180deg,rgba(13,17,28,0.84),rgba(9,12,21,0.82))]"
       }`}
       onClick={() => onSelectTask(task.id)}
       onKeyDown={(event) => {
@@ -222,21 +222,21 @@ function TaskCanvasNode({ data }: NodeProps<TaskCanvasFlowNode>) {
         }
       }}
       role="button"
-      style={{ boxShadow: selected ? `0 0 0 1px ${accent}55, 0 24px 80px rgba(0,0,0,0.42), 0 0 42px ${accent}22` : undefined }}
+      style={{ boxShadow: selected ? `0 0 0 1px ${accent}44, 0 18px 48px rgba(0,0,0,0.34), 0 0 28px ${accent}18` : undefined }}
       tabIndex={0}
     >
-      <div className="flex items-start justify-between gap-4">
-        <div className="flex items-center gap-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex items-center gap-2.5">
           <span
-            className="h-2.5 w-2.5 rounded-full"
-            style={{ backgroundColor: accent, boxShadow: `0 0 16px ${accent}` }}
+            className="h-2 w-2 rounded-full"
+            style={{ backgroundColor: accent, boxShadow: `0 0 12px ${accent}` }}
           />
-          <span className="text-[11px] uppercase tracking-[0.24em] text-white/38">
+          <span className="text-[10px] uppercase tracking-[0.2em] text-white/34">
             {task.depth === 0 ? "root task" : `depth ${task.depth}`}
           </span>
           {hasChildren ? (
             <button
-              className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-white/[0.1] text-white/65 transition hover:border-white/[0.2] hover:text-white"
+              className="inline-flex h-5.5 w-5.5 items-center justify-center rounded-lg border border-white/[0.08] text-white/58 transition hover:border-white/[0.16] hover:text-white"
               onClick={(event) => {
                 event.stopPropagation();
                 onToggleCollapse(task.id);
@@ -247,12 +247,12 @@ function TaskCanvasNode({ data }: NodeProps<TaskCanvasFlowNode>) {
             </button>
           ) : null}
         </div>
-        <div className="relative flex items-center gap-2">
-          <span className="rounded-full border border-white/10 px-2.5 py-1 text-xs text-white/72">
+        <div className="relative flex items-center gap-1.5">
+          <span className="rounded-full border border-white/[0.08] px-2 py-1 text-[10px] text-white/68">
             {statusLabel(task.status)}
           </span>
           <button
-            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-white/[0.08] text-white/68 transition hover:border-white/[0.18] hover:text-white"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-lg border border-white/[0.08] text-white/62 transition hover:border-white/[0.16] hover:text-white"
             onClick={(event) => {
               event.stopPropagation();
               setMenuOpen((current) => !current);
@@ -262,9 +262,9 @@ function TaskCanvasNode({ data }: NodeProps<TaskCanvasFlowNode>) {
             <MoreHorizontal className="h-4 w-4" />
           </button>
           {menuOpen ? (
-            <div className="absolute right-0 top-10 z-20 min-w-44 rounded-2xl border border-white/[0.08] bg-[#081120] p-2 shadow-[0_18px_60px_rgba(0,0,0,0.42)]">
+            <div className="absolute right-0 top-9 z-20 min-w-44 rounded-[14px] border border-white/[0.08] bg-[#0d111a] p-1.5 shadow-[0_18px_60px_rgba(0,0,0,0.42)]">
               <button
-                className="flex w-full items-center rounded-xl px-3 py-2 text-left text-sm text-white/76 transition hover:bg-white/[0.05] hover:text-white"
+                className="flex w-full items-center rounded-[10px] px-3 py-2 text-left text-sm text-white/76 transition hover:bg-white/[0.05] hover:text-white"
                 onClick={(event) => {
                   event.stopPropagation();
                   onSelectTask(task.id);
@@ -275,7 +275,7 @@ function TaskCanvasNode({ data }: NodeProps<TaskCanvasFlowNode>) {
                 聚焦当前节点
               </button>
               <button
-                className="flex w-full items-center rounded-xl px-3 py-2 text-left text-sm text-white/76 transition hover:bg-white/[0.05] hover:text-white"
+                className="flex w-full items-center rounded-[10px] px-3 py-2 text-left text-sm text-white/76 transition hover:bg-white/[0.05] hover:text-white"
                 onClick={(event) => {
                   event.stopPropagation();
                   onStartCreateChild(task.id, task.title);
@@ -287,7 +287,7 @@ function TaskCanvasNode({ data }: NodeProps<TaskCanvasFlowNode>) {
               </button>
               {hasChildren ? (
                 <button
-                  className="flex w-full items-center rounded-xl px-3 py-2 text-left text-sm text-white/76 transition hover:bg-white/[0.05] hover:text-white"
+                  className="flex w-full items-center rounded-[10px] px-3 py-2 text-left text-sm text-white/76 transition hover:bg-white/[0.05] hover:text-white"
                   onClick={(event) => {
                     event.stopPropagation();
                     onToggleCollapse(task.id);
@@ -304,7 +304,7 @@ function TaskCanvasNode({ data }: NodeProps<TaskCanvasFlowNode>) {
                   {(["in_progress", "pending_review", "completed", "terminated"] as TaskStatus[]).map((status) => (
                     <button
                       key={status}
-                      className="flex w-full items-center rounded-xl px-3 py-2 text-left text-sm text-white/76 transition hover:bg-white/[0.05] hover:text-white"
+                      className="flex w-full items-center rounded-[10px] px-3 py-2 text-left text-sm text-white/76 transition hover:bg-white/[0.05] hover:text-white"
                       onClick={(event) => {
                         event.stopPropagation();
                         onQuickStatus(task.id, status);
@@ -322,22 +322,22 @@ function TaskCanvasNode({ data }: NodeProps<TaskCanvasFlowNode>) {
         </div>
       </div>
 
-      <div className="mt-4 space-y-3">
-        <h3 className="text-base font-semibold leading-7 text-white/92">{task.title}</h3>
-        <p className="line-clamp-2 text-sm leading-6 text-[#9ba9cf]">{textPreview(task.content_markdown)}</p>
+      <div className="mt-3 space-y-2">
+        <h3 className="text-[15px] font-semibold leading-6 text-white/92">{task.title}</h3>
+        <p className="line-clamp-2 text-[13px] leading-5 text-[#9ba9cf]">{textPreview(task.content_markdown)}</p>
       </div>
 
-      <div className="mt-5 flex flex-wrap gap-2 text-xs text-white/58">
-        <span className="rounded-full border border-white/8 px-2.5 py-1">权重 {task.weight}</span>
-        <span className="rounded-full border border-white/8 px-2.5 py-1">评分 {task.score ?? "-"}</span>
-        <span className="rounded-full border border-white/8 px-2.5 py-1">
+      <div className="mt-4 flex flex-wrap gap-1.5 text-[11px] text-white/54">
+        <span className="rounded-full border border-white/[0.08] px-2 py-1">权重 {task.weight}</span>
+        <span className="rounded-full border border-white/[0.08] px-2 py-1">评分 {task.score ?? "-"}</span>
+        <span className="rounded-full border border-white/[0.08] px-2 py-1">
           子任务 {hasChildren ? (collapsed ? "已折叠" : task.children.length) : 0}
         </span>
       </div>
 
-      <div className="mt-5 flex items-center justify-between gap-3 border-t border-white/[0.08] pt-4">
-        <div className="flex items-center gap-2 text-xs text-white/46">
-          <Target className="h-3.5 w-3.5" />
+      <div className="mt-4 flex items-center justify-between gap-3 border-t border-white/[0.08] pt-3">
+        <div className="flex items-center gap-2 text-[11px] text-white/44">
+          <Target className="h-3 w-3" />
           <span>
             {task.planned_due_at
               ? `截止 ${new Date(task.planned_due_at).toLocaleDateString("zh-CN")}`
@@ -345,7 +345,7 @@ function TaskCanvasNode({ data }: NodeProps<TaskCanvasFlowNode>) {
           </span>
         </div>
         <button
-          className="inline-flex items-center gap-1 rounded-full border border-white/10 px-3 py-1.5 text-xs text-white/76 transition hover:border-white/22 hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
+          className="inline-flex items-center gap-1 rounded-lg border border-white/[0.08] px-2.5 py-1.5 text-[11px] text-white/72 transition hover:border-white/[0.16] hover:text-white disabled:cursor-not-allowed disabled:opacity-45"
           disabled={readOnly}
           onClick={(event) => {
             event.stopPropagation();
@@ -359,11 +359,11 @@ function TaskCanvasNode({ data }: NodeProps<TaskCanvasFlowNode>) {
       </div>
 
       {!readOnly ? (
-        <div className="mt-4 flex flex-wrap gap-2 border-t border-white/[0.08] pt-4">
+        <div className="mt-3 flex flex-wrap gap-1.5 border-t border-white/[0.08] pt-3">
           {(["in_progress", "pending_review", "completed"] as TaskStatus[]).map((status) => (
             <button
               key={status}
-              className={`rounded-full border px-2.5 py-1 text-xs transition ${
+              className={`rounded-lg border px-2.5 py-1 text-[11px] transition ${
                 task.status === status
                   ? "border-white/20 bg-white/10 text-white"
                   : "border-white/8 text-white/62 hover:border-white/18 hover:text-white"
@@ -436,19 +436,19 @@ export function TaskMindmap({
   );
 
   return (
-    <div className="relative h-[620px] overflow-hidden rounded-[26px] border border-white/[0.08] bg-[linear-gradient(180deg,rgba(8,12,26,0.9),rgba(6,10,22,0.86))] sm:h-[700px] xl:h-[760px]">
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col gap-3 border-b border-white/[0.06] bg-[linear-gradient(180deg,rgba(5,8,20,0.92),rgba(5,8,20,0.62),transparent)] px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+    <div className="relative h-[62vh] min-h-[460px] overflow-hidden rounded-[16px] border border-white/[0.06] bg-[linear-gradient(180deg,rgba(9,12,21,0.96),rgba(8,10,18,0.94))] xl:h-[calc(100vh-17rem)] xl:min-h-[620px]">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col gap-3 border-b border-white/[0.06] bg-[linear-gradient(180deg,rgba(8,10,17,0.96),rgba(8,10,17,0.78),transparent)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-[11px] uppercase tracking-[0.28em] text-white/38">mind map canvas</p>
-          <p className="mt-1 text-sm text-white/72">拖动画布浏览节点，滚轮缩放，点击节点聚焦并快捷创建子任务</p>
+          <p className="text-[10px] uppercase tracking-[0.24em] text-white/34">Mind Map Canvas</p>
+          <p className="mt-1 text-sm text-white/70">拖动画布浏览节点，滚轮缩放，点击节点聚焦并快捷创建子任务</p>
         </div>
-        <div className="flex flex-wrap gap-2 text-[11px] uppercase tracking-[0.22em] text-white/38">
-          <span className="rounded-full border border-white/10 px-2 py-1">react flow</span>
-          <span className="rounded-full border border-white/10 px-2 py-1">workspace map</span>
+        <div className="flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.18em] text-white/34">
+          <span className="rounded-full border border-white/[0.08] px-2 py-1">react flow</span>
+          <span className="rounded-full border border-white/[0.08] px-2 py-1">workspace map</span>
         </div>
       </div>
 
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(122,162,255,0.12),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(139,92,246,0.12),transparent_26%)]" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(139,144,255,0.12),transparent_28%),radial-gradient(circle_at_bottom_right,rgba(91,192,255,0.08),transparent_24%)]" />
 
       <ReactFlow
         edges={edges}

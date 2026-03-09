@@ -1,4 +1,4 @@
-import { WorkspaceWorkbench } from "@/components/workspace-workbench";
+import { redirect } from "next/navigation";
 
 type WorkspaceDetailPageProps = {
   params: Promise<{ workspaceId: string }>;
@@ -7,5 +7,5 @@ type WorkspaceDetailPageProps = {
 export default async function WorkspaceDetailPage({ params }: WorkspaceDetailPageProps) {
   const { workspaceId } = await params;
 
-  return <WorkspaceWorkbench workspaceId={workspaceId} />;
+  redirect(`/workspaces/${workspaceId}/tasks`);
 }

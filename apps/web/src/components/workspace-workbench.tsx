@@ -1,24 +1,20 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ChevronDown, ChevronRight } from "lucide-react";
 import { type FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 
+import { useWorkspaceContext } from "@/components/workspace-context";
+import { TaskDetailPanel } from "@/components/task-detail-panel";
+import { TaskMindmap } from "@/components/task-mindmap";
 import {
   type MessageResponse,
-  type Milestone,
   type MilestoneTreeResponse,
   type TaskStatus,
   type TaskTreeNode,
-  type WorkspaceInvitation,
-  type WorkspaceItem,
-  type WorkspaceMember,
   apiRequest,
 } from "@/lib/api";
-import { getStoredSession } from "@/lib/auth-storage";
-import { TaskDetailPanel } from "@/components/task-detail-panel";
-import { TaskMindmap } from "@/components/task-mindmap";
-import { WorkspaceMembersPanel } from "@/components/workspace-members-panel";
 
 type WorkspaceWorkbenchProps = {
   workspaceId: string;
@@ -143,15 +139,15 @@ function findTaskById(nodes: TaskTreeNode[], taskId: string | null): TaskTreeNod
 }
 
 export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
+  const pathname = usePathname();
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { accessToken, members, milestones, workspace } = useWorkspaceContext();
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>("tree");
-  const [selectedMilestoneId, setSelectedMilestoneId] = useState<string>("live");
   const [selectedStatuses, setSelectedStatuses] = useState<TaskStatus[]>([]);
-  const [workspace, setWorkspace] = useState<WorkspaceItem | null>(null);
-  const [members, setMembers] = useState<WorkspaceMember[]>([]);
-  const [invitations, setInvitations] = useState<WorkspaceInvitation[]>([]);
-  const [milestones, setMilestones] = useState<Milestone[]>([]);
   const [tree, setTree] = useState<TaskTreeNode[]>([]);
   const [collapsedTaskIds, setCollapsedTaskIds] = useState<string[]>([]);
   const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
@@ -161,23 +157,44 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
   const [taskTitle, setTaskTitle] = useState("");
   const [composeParentId, setComposeParentId] = useState<string | null>(null);
   const [composeParentTitle, setComposeParentTitle] = useState<string | null>(null);
-  const [milestoneName, setMilestoneName] = useState("");
-  const [milestoneDescription, setMilestoneDescription] = useState("");
-  const [milestoneTargetAt, setMilestoneTargetAt] = useState("");
   const [submittingTask, setSubmittingTask] = useState(false);
-  const [submittingMilestone, setSubmittingMilestone] = useState(false);
 
+  const selectedMilestoneId = searchParams.get("milestone") ?? "live";
+  const statusQuery = useMemo(() => buildStatusQuery(selectedStatuses), [selectedStatuses]);
   const taskIndex = useMemo(() => createTaskIndex(tree), [tree]);
   const collapsedTaskIdSet = useMemo(() => new Set(collapsedTaskIds), [collapsedTaskIds]);
   const displayTree = useMemo(() => collapseTree(tree, collapsedTaskIdSet), [tree, collapsedTaskIdSet]);
   const flatTasks = useMemo(() => flattenTree(displayTree), [displayTree]);
-  const statusQuery = useMemo(() => buildStatusQuery(selectedStatuses), [selectedStatuses]);
   const selectedTask = useMemo(() => findTaskById(tree, selectedTaskId), [selectedTaskId, tree]);
   const isHistoryView = selectedMilestoneId !== "live";
+  const activeMilestone = useMemo(
+    () => milestones.find((milestone) => milestone.id === selectedMilestoneId) ?? null,
+    [milestones, selectedMilestoneId],
+  );
+
+  const setMilestoneFilter = useCallback(
+    (value: string) => {
+      const params = new URLSearchParams(searchParams.toString());
+      if (value === "live") {
+        params.delete("milestone");
+      } else {
+        params.set("milestone", value);
+      }
+
+      const query = params.toString();
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParams],
+  );
+
+  useEffect(() => {
+    if (selectedMilestoneId !== "live" && milestones.length && !activeMilestone) {
+      setMilestoneFilter("live");
+    }
+  }, [activeMilestone, milestones.length, selectedMilestoneId, setMilestoneFilter]);
 
   const loadWorkbench = useCallback(async () => {
-    const session = getStoredSession();
-    if (!session?.access_token) {
+    if (!accessToken) {
       setError("请先登录，再打开工作空间。");
       setLoading(false);
       return;
@@ -187,41 +204,24 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
       setLoading(true);
       setError(null);
 
-      const treePromise =
+      const treeResponse =
         selectedMilestoneId === "live"
-          ? apiRequest<TaskTreeNode[]>(`/workspaces/${workspaceId}/tasks/tree${statusQuery}`, {
-              token: session.access_token,
+          ? await apiRequest<TaskTreeNode[]>(`/workspaces/${workspaceId}/tasks/tree${statusQuery}`, {
+              token: accessToken,
             })
-          : apiRequest<MilestoneTreeResponse>(
+          : await apiRequest<MilestoneTreeResponse>(
               `/workspaces/${workspaceId}/milestones/${selectedMilestoneId}/tree${statusQuery}`,
-              { token: session.access_token },
+              { token: accessToken },
             ).then((response) => response.tree);
 
-      const [workspaces, membersResponse, invitationsResponse, milestonesResponse, treeResponse] = await Promise.all([
-        apiRequest<WorkspaceItem[]>("/workspaces", { token: session.access_token }),
-        apiRequest<WorkspaceMember[]>(`/workspaces/${workspaceId}/members`, {
-          token: session.access_token,
-        }),
-        apiRequest<WorkspaceInvitation[]>(`/workspaces/${workspaceId}/invitations`, {
-          token: session.access_token,
-        }).catch(() => []),
-        apiRequest<Milestone[]>(`/workspaces/${workspaceId}/milestones`, {
-          token: session.access_token,
-        }),
-        treePromise,
-      ]);
-
-      setWorkspace(workspaces.find((item) => item.id === workspaceId) ?? null);
-      setMembers(membersResponse);
-      setInvitations(invitationsResponse);
-      setMilestones(milestonesResponse);
       setTree(treeResponse);
     } catch (loadError) {
-      setError(loadError instanceof Error ? loadError.message : "加载工作台失败。");
+      setError(loadError instanceof Error ? loadError.message : "加载任务工作台失败。");
+      setTree([]);
     } finally {
       setLoading(false);
     }
-  }, [selectedMilestoneId, statusQuery, workspaceId]);
+  }, [accessToken, selectedMilestoneId, statusQuery, workspaceId]);
 
   useEffect(() => {
     void loadWorkbench();
@@ -252,10 +252,13 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
     setSelectedTaskIds((current) => current.filter((taskId) => visibleTaskIds.has(taskId)));
   }, [flatTasks]);
 
+  if (!workspace) {
+    return null;
+  }
+
   async function handleCreateTask(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const session = getStoredSession();
-    if (!session?.access_token || !taskTitle.trim()) {
+    if (!accessToken || !taskTitle.trim()) {
       return;
     }
 
@@ -269,7 +272,7 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
       setError(null);
       await apiRequest(`/workspaces/${workspaceId}/tasks`, {
         method: "POST",
-        token: session.access_token,
+        token: accessToken,
         json: {
           parent_id: composeParentId,
           title: taskTitle.trim(),
@@ -283,36 +286,6 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
       setError(submitError instanceof Error ? submitError.message : "创建任务失败。");
     } finally {
       setSubmittingTask(false);
-    }
-  }
-
-  async function handleCreateMilestone(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const session = getStoredSession();
-    if (!session?.access_token || !milestoneName.trim() || !milestoneTargetAt) {
-      return;
-    }
-
-    try {
-      setSubmittingMilestone(true);
-      setError(null);
-      const milestone = await apiRequest<Milestone>(`/workspaces/${workspaceId}/milestones`, {
-        method: "POST",
-        token: session.access_token,
-        json: {
-          name: milestoneName.trim(),
-          description: milestoneDescription.trim() || null,
-          target_at: new Date(milestoneTargetAt).toISOString(),
-        },
-      });
-      setMilestoneName("");
-      setMilestoneDescription("");
-      setMilestoneTargetAt("");
-      setSelectedMilestoneId(milestone.id);
-    } catch (submitError) {
-      setError(submitError instanceof Error ? submitError.message : "创建里程碑失败。");
-    } finally {
-      setSubmittingMilestone(false);
     }
   }
 
@@ -333,8 +306,7 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
   }
 
   async function handleQuickStatus(taskId: string, status: TaskStatus) {
-    const session = getStoredSession();
-    if (!session?.access_token || isHistoryView) {
+    if (!accessToken || isHistoryView) {
       return;
     }
 
@@ -342,7 +314,7 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
       setError(null);
       await apiRequest(`/workspaces/${workspaceId}/tasks/${taskId}/status`, {
         method: "POST",
-        token: session.access_token,
+        token: accessToken,
         json: { status },
       });
       await loadWorkbench();
@@ -382,8 +354,7 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
   }
 
   async function handleBulkStatus(status: TaskStatus) {
-    const session = getStoredSession();
-    if (!session?.access_token || !selectedTaskIds.length || isHistoryView) {
+    if (!accessToken || !selectedTaskIds.length || isHistoryView) {
       return;
     }
 
@@ -391,7 +362,7 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
       setError(null);
       await apiRequest<MessageResponse>(`/workspaces/${workspaceId}/tasks/bulk-status`, {
         method: "POST",
-        token: session.access_token,
+        token: accessToken,
         json: { task_ids: selectedTaskIds, status },
       });
       setSelectedTaskIds([]);
@@ -402,8 +373,7 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
   }
 
   async function handleBulkDelete() {
-    const session = getStoredSession();
-    if (!session?.access_token || !selectedTaskIds.length || isHistoryView) {
+    if (!accessToken || !selectedTaskIds.length || isHistoryView) {
       return;
     }
 
@@ -415,7 +385,7 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
       setError(null);
       await apiRequest<MessageResponse>(`/workspaces/${workspaceId}/tasks/bulk-delete`, {
         method: "POST",
-        token: session.access_token,
+        token: accessToken,
         json: { task_ids: selectedTaskIds },
       });
       setSelectedTaskIds([]);
@@ -426,8 +396,7 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
   }
 
   async function handleReorderDrop(targetTaskId: string) {
-    const session = getStoredSession();
-    if (!session?.access_token || !draggingTaskId || draggingTaskId === targetTaskId || isHistoryView) {
+    if (!accessToken || !draggingTaskId || draggingTaskId === targetTaskId || isHistoryView) {
       setDraggingTaskId(null);
       setDropTargetTaskId(null);
       return;
@@ -457,7 +426,7 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
       setError(null);
       await apiRequest<MessageResponse>(`/workspaces/${workspaceId}/tasks/reorder`, {
         method: "POST",
-        token: session.access_token,
+        token: accessToken,
         json: {
           parent_id: draggedTask.parent_id,
           task_ids: siblingIds,
@@ -472,82 +441,68 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
     }
   }
 
-  if (loading) {
-    return (
-      <main className="mx-auto flex min-h-screen w-full max-w-7xl items-center justify-center px-6 py-10 sm:px-8 lg:px-12">
-        <div className="panel rounded-[28px] px-8 py-6 text-sm text-white/72">正在加载任务工作台...</div>
-      </main>
-    );
-  }
-
-  if (!workspace) {
-    return (
-      <main className="mx-auto flex min-h-screen w-full max-w-6xl items-center px-6 py-10 sm:px-8 lg:px-12">
-        <div className="panel w-full rounded-[32px] p-8 sm:p-10">
-          <p className="text-xs uppercase tracking-[0.34em] text-white/38">Workspace Workbench</p>
-          <h1 className="mt-4 text-4xl font-semibold tracking-[-0.04em] text-white">
-            暂时无法读取工作空间
-          </h1>
-          <p className="mt-5 text-sm leading-8 text-text-muted sm:text-base">
-            {error ?? "请先登录，或确认当前账号已经加入该工作空间。"}
-          </p>
-          <div className="mt-8 flex gap-3">
-            <Link className="primary-button" href="/workspaces">
-              返回空间列表
-            </Link>
-            <Link className="secondary-button" href="/auth/login">
-              去登录
-            </Link>
-          </div>
-        </div>
-      </main>
-    );
-  }
-
   return (
-    <main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col px-6 py-8 sm:px-8 lg:px-12">
-      <header className="panel rounded-[32px] px-6 py-6 sm:px-8">
-        <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-[0.34em] text-white/38">Workspace Workbench</p>
-            <h1 className="mt-4 text-3xl font-semibold tracking-[-0.04em] text-white sm:text-4xl">
-              {workspace.name}
-            </h1>
-            <p className="mt-3 text-sm leading-7 text-text-muted">
-              角色：{workspace.role} · 成员 {members.length} 人 · 视图模式 {viewMode === "tree" ? "思维导图" : "表格"}
+    <div className="space-y-3">
+      <section className="panel rounded-[20px] px-4 py-4 sm:px-5">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.24em] text-white/34">
+              <span>Task Workbench</span>
+              <span className="rounded-full border border-white/[0.08] px-2 py-1 text-white/48">{workspace.name}</span>
+              <span className="rounded-full border border-white/[0.08] px-2 py-1 text-white/48">
+                {isHistoryView ? "History Snapshot" : "Live Tree"}
+              </span>
+            </div>
+            <h2 className="mt-3 text-2xl font-semibold tracking-[-0.04em] text-white">任务工作区</h2>
+            <p className="mt-2 max-w-3xl text-sm text-text-muted">
+              固定左侧菜单仅负责模块切换，右侧区域集中处理筛选、结构浏览、节点编辑与里程碑快照切换。
             </p>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-3xl border border-white/[0.08] bg-white/[0.04] px-4 py-4">
-              <p className="text-xs uppercase tracking-[0.24em] text-white/35">当前节点数</p>
-              <p className="mt-3 text-xl font-semibold text-white/90">{flatTasks.length}</p>
+
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
+            <div className="rounded-[16px] border border-white/[0.08] bg-white/[0.03] px-3 py-2.5">
+              <p className="text-[10px] uppercase tracking-[0.24em] text-white/30">Visible</p>
+              <p className="mt-1 text-base font-semibold text-white/90">{flatTasks.length} 个节点</p>
             </div>
-            <div className="rounded-3xl border border-white/[0.08] bg-white/[0.04] px-4 py-4">
-              <p className="text-xs uppercase tracking-[0.24em] text-white/35">里程碑</p>
-              <p className="mt-3 text-xl font-semibold text-white/90">{milestones.length}</p>
+            <div className="rounded-[16px] border border-white/[0.08] bg-white/[0.03] px-3 py-2.5">
+              <p className="text-[10px] uppercase tracking-[0.24em] text-white/30">Mode</p>
+              <p className="mt-1 text-base font-semibold text-white/90">{viewMode === "tree" ? "导图" : "表格"}</p>
             </div>
-            <div className="rounded-3xl border border-white/[0.08] bg-white/[0.04] px-4 py-4">
-              <p className="text-xs uppercase tracking-[0.24em] text-white/35">当前视图</p>
-              <p className="mt-3 text-xl font-semibold text-white/90">
-                {selectedMilestoneId === "live" ? "当前任务" : "历史里程碑"}
+            <div className="rounded-[16px] border border-white/[0.08] bg-white/[0.03] px-3 py-2.5">
+              <p className="text-[10px] uppercase tracking-[0.24em] text-white/30">Milestone</p>
+              <p className="mt-1 line-clamp-1 text-base font-semibold text-white/90">
+                {selectedMilestoneId === "live" ? "当前任务" : activeMilestone?.name ?? "历史快照"}
               </p>
             </div>
-            <Link className="rounded-3xl border border-white/[0.08] bg-white/[0.04] px-4 py-4 transition hover:border-white/[0.18] hover:bg-white/[0.06]" href={`/workspaces/${workspace.id}/stats`}>
-              <p className="text-xs uppercase tracking-[0.24em] text-white/35">统计入口</p>
-              <p className="mt-3 text-xl font-semibold text-white/90">查看统计</p>
+            <Link
+              className="secondary-button h-full justify-center rounded-[16px] border-white/[0.08] bg-white/[0.03] px-3"
+              href={`/workspaces/${workspace.id}/milestones`}
+            >
+              里程碑管理
+            </Link>
+            <Link
+              className="secondary-button h-full justify-center rounded-[16px] border-white/[0.08] bg-white/[0.03] px-3"
+              href={`/workspaces/${workspace.id}/stats`}
+            >
+              统计与审计
             </Link>
           </div>
         </div>
-      </header>
+      </section>
 
-      <section className="mt-6 grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-        <div className="panel rounded-[28px] p-6 sm:p-8">
-          <p className="text-xs uppercase tracking-[0.28em] text-white/38">Controls</p>
-          <h2 className="mt-4 text-2xl font-semibold tracking-[-0.03em] text-white">
-            主工作台切换与筛选
-          </h2>
+      <section className="grid gap-3 2xl:grid-cols-[1.1fr_1fr_0.95fr] xl:grid-cols-2">
+        <div className="panel rounded-[18px] p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.24em] text-white/32">Filters</p>
+              <h3 className="mt-1 text-base font-semibold text-white/90">视图与状态筛选</h3>
+            </div>
+            <span className="rounded-full border border-white/[0.08] px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-white/40">
+              {selectedStatuses.length ? `${selectedStatuses.length} Filters` : "No Filter"}
+            </span>
+          </div>
 
-          <div className="mt-6 grid gap-4 lg:grid-cols-2">
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
             <div>
               <label className="field-label" htmlFor="milestone-select">
                 当前视图
@@ -555,7 +510,7 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
               <select
                 className="field-input"
                 id="milestone-select"
-                onChange={(event) => setSelectedMilestoneId(event.target.value)}
+                onChange={(event) => setMilestoneFilter(event.target.value)}
                 value={selectedMilestoneId}
               >
                 <option value="live">当前任务视图</option>
@@ -568,17 +523,17 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
             </div>
 
             <div>
-              <label className="field-label">视图模式</label>
-              <div className="flex gap-3">
+              <label className="field-label">呈现模式</label>
+              <div className="grid grid-cols-2 gap-2">
                 <button
-                  className={viewMode === "tree" ? "primary-button" : "secondary-button"}
+                  className={viewMode === "tree" ? "primary-button w-full" : "secondary-button w-full"}
                   onClick={() => setViewMode("tree")}
                   type="button"
                 >
                   思维导图
                 </button>
                 <button
-                  className={viewMode === "table" ? "primary-button" : "secondary-button"}
+                  className={viewMode === "table" ? "primary-button w-full" : "secondary-button w-full"}
                   onClick={() => setViewMode("table")}
                   type="button"
                 >
@@ -588,9 +543,8 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
             </div>
           </div>
 
-          <div className="mt-6">
-            <label className="field-label">状态筛选</label>
-            <div className="flex flex-wrap gap-3">
+          <div className="mt-4 rounded-[16px] border border-white/[0.08] bg-white/[0.03] p-3 text-sm text-text-muted">
+            <div className="flex flex-wrap items-center gap-2">
               {statusOptions.map((option) => (
                 <button
                   key={option.value}
@@ -603,98 +557,47 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
               ))}
             </div>
           </div>
+        </div>
 
-          <div className="mt-6">
-            <label className="field-label">节点展开控制</label>
-            <div className="flex flex-wrap gap-3">
+        <div className="panel rounded-[18px] p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.24em] text-white/32">Quick Compose</p>
+              <h3 className="mt-1 text-base font-semibold text-white/90">任务创建与结构动作</h3>
+            </div>
+            <div className="flex items-center gap-2">
               <button className="secondary-button" onClick={expandAllBranches} type="button">
-                全部展开
+                全展开
               </button>
               <button className="secondary-button" onClick={collapseAllBranches} type="button">
-                折叠全部子树
+                折叠子树
               </button>
             </div>
           </div>
 
-          <div className="mt-6 rounded-[24px] border border-white/[0.08] bg-white/[0.04] p-4">
-            <p className="text-xs uppercase tracking-[0.24em] text-white/38">Selected node</p>
-            {selectedTask ? (
-              <>
-                <div className="mt-3 flex items-center gap-2">
-                  <span className={`rounded-full border px-2.5 py-1 text-xs ${statusTone(selectedTask.status)}`}>
-                    {statusLabel(selectedTask.status)}
-                  </span>
-                  <span className="text-xs text-white/42">
-                    {selectedTask.children.length} 个子任务 · 深度 {selectedTask.depth}
-                  </span>
-                </div>
-                <h3 className="mt-4 text-lg font-semibold text-white/88">{selectedTask.title}</h3>
-                <p className="mt-3 text-sm leading-7 text-text-muted">
-                  {selectedTask.content_markdown
-                    ? selectedTask.content_markdown.replace(/[#*_`>-]/g, " ").replace(/\s+/g, " ").trim().slice(0, 140)
-                    : "当前节点还没有补充描述内容。"}
-                </p>
-                <div className="mt-4 flex flex-wrap gap-3 text-xs text-white/56">
-                  <span>权重 {selectedTask.weight}</span>
-                  <span>评分 {selectedTask.score ?? "-"}</span>
-                  <span>负责人 {selectedTask.assignee_user_id ?? "未分配"}</span>
-                </div>
-                <button
-                  className="secondary-button mt-5"
-                  disabled={isHistoryView}
-                  onClick={() => startCreateChild(selectedTask.id, selectedTask.title)}
-                  type="button"
-                >
-                  {isHistoryView ? "历史视图只读" : "以此节点新建子任务"}
-                </button>
-                {selectedTask.children.length ? (
-                  <button
-                    className="secondary-button mt-3"
-                    onClick={() => toggleTaskCollapse(selectedTask.id)}
-                    type="button"
-                  >
-                    {collapsedTaskIdSet.has(selectedTask.id) ? "展开当前子树" : "折叠当前子树"}
-                  </button>
-                ) : null}
-              </>
-            ) : (
-              <p className="mt-3 text-sm text-text-muted">点击思维导图中的任意节点后，这里会显示当前聚焦节点信息。</p>
-            )}
-          </div>
-        </div>
+          <form className="mt-4 flex flex-col gap-2 xl:flex-row" onSubmit={handleCreateTask}>
+            <input
+              className="field-input"
+              disabled={isHistoryView}
+              onChange={(event) => setTaskTitle(event.target.value)}
+              placeholder={composeParentTitle ? `创建到：${composeParentTitle}` : "输入任务名称，默认创建顶层节点"}
+              value={taskTitle}
+            />
+            <button className="primary-button min-w-28" disabled={submittingTask} type="submit">
+              {submittingTask ? "创建中..." : composeParentTitle ? "创建子任务" : "创建任务"}
+            </button>
+          </form>
 
-        <div className="grid gap-6">
-          <div className="panel rounded-[28px] p-6 sm:p-8">
-            <p className="text-xs uppercase tracking-[0.28em] text-white/38">Quick compose</p>
-            <h2 className="mt-4 text-2xl font-semibold tracking-[-0.03em] text-white">快速新建任务</h2>
-            {composeParentTitle ? (
-              <p className="mt-3 text-sm text-text-muted">当前会创建到节点：{composeParentTitle}</p>
-            ) : (
-              <p className="mt-3 text-sm text-text-muted">当前会创建为顶层任务。</p>
-            )}
-
-            {isHistoryView ? (
-              <div className="mt-4 rounded-2xl border border-amber-400/20 bg-amber-400/10 px-4 py-3 text-sm text-amber-100">
-                当前处于历史里程碑视图，只能查看快照，不能直接修改任务树。
-              </div>
-            ) : null}
-
-            <form className="mt-6 flex flex-col gap-4 sm:flex-row" onSubmit={handleCreateTask}>
-              <input
-                className="field-input"
-                disabled={isHistoryView}
-                onChange={(event) => setTaskTitle(event.target.value)}
-                placeholder={composeParentTitle ? "输入子任务名称" : "输入任务名称"}
-                value={taskTitle}
-              />
-              <button className="primary-button justify-center" disabled={submittingTask} type="submit">
-                {submittingTask ? "创建中..." : composeParentTitle ? "创建子任务" : "创建任务"}
-              </button>
-            </form>
-
+          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-white/48">
+            <span className="rounded-full border border-white/[0.08] px-2.5 py-1">
+              {composeParentTitle ? `父节点：${composeParentTitle}` : "父节点：顶层"}
+            </span>
+            <span className="rounded-full border border-white/[0.08] px-2.5 py-1">
+              {isHistoryView ? "当前为只读快照" : "当前可编辑"}
+            </span>
             {composeParentTitle ? (
               <button
-                className="secondary-button mt-4"
+                className="secondary-button"
                 onClick={() => {
                   setComposeParentId(null);
                   setComposeParentTitle(null);
@@ -705,298 +608,287 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
               </button>
             ) : null}
           </div>
+        </div>
 
-          <div className="panel rounded-[28px] p-6 sm:p-8">
-            <p className="text-xs uppercase tracking-[0.28em] text-white/38">Milestone</p>
-            <h2 className="mt-4 text-2xl font-semibold tracking-[-0.03em] text-white">创建里程碑并归档历史任务</h2>
-            <form className="mt-6 grid gap-4 lg:grid-cols-[1fr_220px_auto]" onSubmit={handleCreateMilestone}>
-              <input
-                className="field-input"
-                onChange={(event) => setMilestoneName(event.target.value)}
-                placeholder="里程碑名称，例如 Sprint Alpha"
-                value={milestoneName}
-              />
-              <textarea
-                className="field-input min-h-[120px] resize-y lg:col-span-3"
-                onChange={(event) => setMilestoneDescription(event.target.value)}
-                placeholder="描述本次里程碑的归档目的、阶段目标或说明"
-                value={milestoneDescription}
-              />
-              <input
-                className="field-input"
-                onChange={(event) => setMilestoneTargetAt(event.target.value)}
-                type="datetime-local"
-                value={milestoneTargetAt}
-              />
-              <button className="primary-button justify-center" disabled={submittingMilestone} type="submit">
-                {submittingMilestone ? "创建中..." : "创建里程碑"}
-              </button>
-            </form>
-
-            <div className="mt-6 grid gap-4 xl:grid-cols-2">
-              <button
-                className={selectedMilestoneId === "live" ? "primary-button justify-center" : "secondary-button justify-center"}
-                onClick={() => setSelectedMilestoneId("live")}
-                type="button"
-              >
-                查看当前任务视图
-              </button>
-              <div className="rounded-2xl border border-white/[0.08] bg-white/[0.04] px-4 py-3 text-sm text-text-muted">
-                已创建 {milestones.length} 个里程碑，归档后可随时切换回历史快照。
-              </div>
-              {milestones.map((milestone) => (
-                <article
-                  key={milestone.id}
-                  className={`rounded-[24px] border px-4 py-4 ${
-                    selectedMilestoneId === milestone.id
-                      ? "border-white/18 bg-white/[0.08]"
-                      : "border-white/[0.08] bg-white/[0.04]"
-                  } xl:col-span-1`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-base font-semibold text-white/88">{milestone.name}</p>
-                      <p className="mt-2 text-sm text-text-muted">
-                        {milestone.description || "未填写描述"}
-                      </p>
-                    </div>
-                    <button
-                      className={selectedMilestoneId === milestone.id ? "primary-button" : "secondary-button"}
-                      onClick={() => setSelectedMilestoneId(milestone.id)}
-                      type="button"
-                    >
-                      {selectedMilestoneId === milestone.id ? "当前查看中" : "查看快照"}
-                    </button>
-                  </div>
-                  <div className="mt-4 flex flex-wrap gap-3 text-xs text-white/52">
-                    <span>归档 {milestone.archived_task_count} 项</span>
-                    <span>{new Date(milestone.target_at).toLocaleString("zh-CN")}</span>
-                  </div>
-                </article>
-              ))}
+        <div className="panel rounded-[18px] p-4 xl:col-span-2 2xl:col-span-1">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.24em] text-white/32">Focus Node</p>
+              <h3 className="mt-1 text-base font-semibold text-white/90">当前聚焦节点</h3>
             </div>
+            <Link className="secondary-button" href={`/workspaces/${workspaceId}/milestones`}>
+              里程碑页
+            </Link>
           </div>
+
+          {selectedTask ? (
+            <div className="mt-4 rounded-[16px] border border-white/[0.08] bg-white/[0.03] p-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className={`rounded-full border px-2.5 py-1 text-xs ${statusTone(selectedTask.status)}`}>
+                  {statusLabel(selectedTask.status)}
+                </span>
+                <span className="text-xs text-white/42">
+                  深度 {selectedTask.depth} · 子任务 {selectedTask.children.length}
+                </span>
+              </div>
+              <h4 className="mt-3 text-sm font-semibold text-white/90">{selectedTask.title}</h4>
+              <p className="mt-2 line-clamp-3 text-sm leading-6 text-text-muted">
+                {selectedTask.content_markdown
+                  ? selectedTask.content_markdown.replace(/[#*_`>-]/g, " ").replace(/\s+/g, " ").trim().slice(0, 140)
+                  : "当前节点还没有补充描述内容。"}
+              </p>
+              <div className="mt-3 flex flex-wrap gap-2 text-xs text-white/48">
+                <span className="rounded-full border border-white/[0.08] px-2.5 py-1">权重 {selectedTask.weight}</span>
+                <span className="rounded-full border border-white/[0.08] px-2.5 py-1">评分 {selectedTask.score ?? "-"}</span>
+                <span className="rounded-full border border-white/[0.08] px-2.5 py-1">
+                  负责人 {selectedTask.assignee_user_id ?? "未分配"}
+                </span>
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <button
+                  className="secondary-button"
+                  disabled={isHistoryView}
+                  onClick={() => startCreateChild(selectedTask.id, selectedTask.title)}
+                  type="button"
+                >
+                  {isHistoryView ? "历史只读" : "创建子任务"}
+                </button>
+                {selectedTask.children.length ? (
+                  <button className="secondary-button" onClick={() => toggleTaskCollapse(selectedTask.id)} type="button">
+                    {collapsedTaskIdSet.has(selectedTask.id) ? "展开当前子树" : "折叠当前子树"}
+                  </button>
+                ) : null}
+              </div>
+            </div>
+          ) : (
+            <div className="mt-4 rounded-[16px] border border-dashed border-white/[0.1] px-4 py-6 text-sm text-text-muted">
+              点击导图或表格中的任意节点后，这里会显示聚焦摘要，并提供快捷结构操作。
+            </div>
+          )}
         </div>
       </section>
 
-      {error ? <p className="mt-6 text-sm text-rose-300">{error}</p> : null}
+      {error ? <p className="text-sm text-rose-300">{error}</p> : null}
 
-      <section className="mt-6 panel rounded-[28px] p-6 sm:p-8">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-[0.28em] text-white/38">Task view</p>
-            <h2 className="mt-4 text-2xl font-semibold tracking-[-0.03em] text-white">
-              {selectedMilestoneId === "live" ? "当前任务树" : "里程碑历史视图"}
-            </h2>
+      <section className="grid items-start gap-3 xl:grid-cols-[minmax(0,1fr)_22rem]">
+        <div className="panel min-h-0 rounded-[20px] p-0">
+          <div className="flex flex-col gap-3 border-b border-white/[0.06] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="text-[10px] uppercase tracking-[0.24em] text-white/32">Task View</p>
+              <h3 className="mt-1 text-base font-semibold text-white/92">
+                {selectedMilestoneId === "live" ? "当前任务树" : `历史快照 · ${activeMilestone?.name ?? "里程碑"}`}
+              </h3>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-white/44">
+              <span className="rounded-full border border-white/[0.08] px-2.5 py-1">
+                {selectedMilestoneId === "live" ? "实时视图" : "只读快照"}
+              </span>
+              <span className="rounded-full border border-white/[0.08] px-2.5 py-1">
+                {viewMode === "tree" ? "Mind Map" : "Table Grid"}
+              </span>
+              <span className="rounded-full border border-white/[0.08] px-2.5 py-1">{flatTasks.length} Nodes</span>
+            </div>
           </div>
-          <p className="text-sm text-text-muted">
-            {selectedMilestoneId === "live"
-              ? "当前视图默认隐藏已归档任务。"
-              : "历史视图展示里程碑快照，并保留上下文节点。"}
-          </p>
-        </div>
 
-        <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
-          <div>
-            {flatTasks.length ? (
-              viewMode === "tree" ? (
-                <TaskMindmap
-                  collapsedTaskIds={collapsedTaskIdSet}
-                  onQuickStatus={handleQuickStatus}
-                  onToggleCollapse={toggleTaskCollapse}
-                  onSelectTask={setSelectedTaskId}
-                  onStartCreateChild={startCreateChild}
-                  readOnly={isHistoryView}
-                  selectedTaskId={selectedTaskId}
-                  taskIndex={taskIndex}
-                  tree={displayTree}
-                />
-              ) : (
-                <div className="overflow-x-auto rounded-[24px] border border-white/[0.08] bg-white/[0.03]">
-                  {selectedTaskIds.length ? (
-                    <div className="flex flex-wrap items-center gap-3 border-b border-white/[0.08] px-4 py-4">
-                      <span className="text-sm text-white/72">已选择 {selectedTaskIds.length} 项</span>
-                      {(["in_progress", "pending_review", "completed", "terminated"] as TaskStatus[]).map((status) => (
+          {loading ? (
+            <div className="flex min-h-[48vh] items-center justify-center px-5 py-10 text-sm text-white/72">正在加载任务视图...</div>
+          ) : (
+            <div className="min-h-0 p-3">
+              {flatTasks.length ? (
+                viewMode === "tree" ? (
+                  <TaskMindmap
+                    collapsedTaskIds={collapsedTaskIdSet}
+                    onQuickStatus={handleQuickStatus}
+                    onSelectTask={setSelectedTaskId}
+                    onStartCreateChild={startCreateChild}
+                    onToggleCollapse={toggleTaskCollapse}
+                    readOnly={isHistoryView}
+                    selectedTaskId={selectedTaskId}
+                    taskIndex={taskIndex}
+                    tree={displayTree}
+                  />
+                ) : (
+                  <div className="overflow-x-auto rounded-[16px] border border-white/[0.06] bg-white/[0.02]">
+                    {selectedTaskIds.length ? (
+                      <div className="flex flex-wrap items-center gap-2 border-b border-white/[0.06] px-3 py-3">
+                        <span className="mr-1 text-sm text-white/72">已选择 {selectedTaskIds.length} 项</span>
+                        {(["in_progress", "pending_review", "completed", "terminated"] as TaskStatus[]).map((status) => (
+                          <button
+                            key={status}
+                            className="secondary-button"
+                            disabled={isHistoryView}
+                            onClick={() => void handleBulkStatus(status)}
+                            type="button"
+                          >
+                            批量设为{statusLabel(status)}
+                          </button>
+                        ))}
                         <button
-                          key={status}
-                          className="secondary-button"
+                          className="secondary-button border-rose-400/18 text-rose-200 hover:border-rose-400/30 hover:text-rose-100"
                           disabled={isHistoryView}
-                          onClick={() => void handleBulkStatus(status)}
+                          onClick={() => void handleBulkDelete()}
                           type="button"
                         >
-                          批量设为{statusLabel(status)}
+                          批量删除
                         </button>
-                      ))}
-                      <button
-                        className="secondary-button border-rose-400/18 text-rose-200 hover:border-rose-400/30 hover:text-rose-100"
-                        disabled={isHistoryView}
-                        onClick={() => void handleBulkDelete()}
-                        type="button"
-                      >
-                        批量删除
-                      </button>
-                    </div>
-                  ) : null}
-                  <table className="min-w-full border-collapse text-left text-sm">
-                    <thead>
-                      <tr className="border-b border-white/[0.08] text-white/52">
-                        <th className="px-4 py-3 font-medium">
-                          <input
-                            checked={flatTasks.length > 0 && flatTasks.every((task) => selectedTaskIds.includes(task.id))}
-                            className="h-4 w-4"
-                            onChange={toggleAllVisibleTasks}
-                            type="checkbox"
-                          />
-                        </th>
-                        <th className="px-4 py-3 font-medium">任务</th>
-                        <th className="px-4 py-3 font-medium">状态</th>
-                        <th className="px-4 py-3 font-medium">负责人</th>
-                        <th className="px-4 py-3 font-medium">权重</th>
-                        <th className="px-4 py-3 font-medium">评分</th>
-                        <th className="px-4 py-3 font-medium">截止时间</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {flatTasks.map((task) => (
-                        <tr
-                          key={task.id}
-                          className={`border-b text-white/78 last:border-b-0 ${
-                            dropTargetTaskId === task.id
-                              ? "border-sky-400/40 bg-sky-400/8"
-                              : "border-white/[0.06]"
-                          } ${draggingTaskId === task.id ? "opacity-45" : ""}`}
-                          onClick={() => setSelectedTaskId(task.id)}
-                          onDragEnd={() => {
-                            setDraggingTaskId(null);
-                            setDropTargetTaskId(null);
-                          }}
-                          onDragOver={(event) => {
-                            const draggedTask = draggingTaskId ? taskIndex.get(draggingTaskId) : null;
-                            const targetTask = taskIndex.get(task.id);
-                            if (
-                              draggedTask &&
-                              targetTask &&
-                              draggedTask.parent_id === targetTask.parent_id &&
-                              !isHistoryView
-                            ) {
-                              event.preventDefault();
-                              setDropTargetTaskId(task.id);
-                            }
-                          }}
-                          onDrop={(event) => {
-                            event.preventDefault();
-                            void handleReorderDrop(task.id);
-                          }}
-                        >
-                          <td className="px-4 py-3">
+                      </div>
+                    ) : null}
+                    <table className="min-w-full border-collapse text-left text-[13px]">
+                      <thead>
+                        <tr className="border-b border-white/[0.06] text-white/46">
+                          <th className="px-3 py-2.5 font-medium">
                             <input
-                              checked={selectedTaskIds.includes(task.id)}
+                              checked={flatTasks.length > 0 && flatTasks.every((task) => selectedTaskIds.includes(task.id))}
                               className="h-4 w-4"
-                              onChange={(event) => {
-                                event.stopPropagation();
-                                toggleTaskSelection(task.id);
-                              }}
+                              onChange={toggleAllVisibleTasks}
                               type="checkbox"
                             />
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-2" style={{ paddingLeft: `${task.level * 16}px` }}>
-                              <button
-                                className="inline-flex h-7 w-7 cursor-grab items-center justify-center rounded-full border border-white/[0.08] text-white/68 transition hover:border-white/[0.18] hover:text-white active:cursor-grabbing disabled:opacity-40"
-                                disabled={isHistoryView}
-                                draggable={!isHistoryView}
-                                onDragStart={(event) => {
+                          </th>
+                          <th className="px-3 py-2.5 font-medium">任务</th>
+                          <th className="px-3 py-2.5 font-medium">状态</th>
+                          <th className="px-3 py-2.5 font-medium">负责人</th>
+                          <th className="px-3 py-2.5 font-medium">权重</th>
+                          <th className="px-3 py-2.5 font-medium">评分</th>
+                          <th className="px-3 py-2.5 font-medium">截止时间</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {flatTasks.map((task) => (
+                          <tr
+                            key={task.id}
+                            className={`border-b text-white/76 last:border-b-0 ${
+                              dropTargetTaskId === task.id
+                                ? "border-sky-400/40 bg-sky-400/8"
+                                : "border-white/[0.04] hover:bg-white/[0.02]"
+                            } ${draggingTaskId === task.id ? "opacity-45" : ""}`}
+                            onClick={() => setSelectedTaskId(task.id)}
+                            onDragEnd={() => {
+                              setDraggingTaskId(null);
+                              setDropTargetTaskId(null);
+                            }}
+                            onDragOver={(event) => {
+                              const draggedTask = draggingTaskId ? taskIndex.get(draggingTaskId) : null;
+                              const targetTask = taskIndex.get(task.id);
+                              if (
+                                draggedTask &&
+                                targetTask &&
+                                draggedTask.parent_id === targetTask.parent_id &&
+                                !isHistoryView
+                              ) {
+                                event.preventDefault();
+                                setDropTargetTaskId(task.id);
+                              }
+                            }}
+                            onDrop={(event) => {
+                              event.preventDefault();
+                              void handleReorderDrop(task.id);
+                            }}
+                          >
+                            <td className="px-3 py-2.5">
+                              <input
+                                checked={selectedTaskIds.includes(task.id)}
+                                className="h-4 w-4"
+                                onChange={(event) => {
                                   event.stopPropagation();
-                                  setDraggingTaskId(task.id);
-                                  setDropTargetTaskId(task.id);
+                                  toggleTaskSelection(task.id);
                                 }}
-                                onClick={(event) => event.stopPropagation()}
-                                type="button"
-                              >
-                                ::
-                              </button>
-                              {taskIndex.get(task.id)?.children.length ? (
+                                type="checkbox"
+                              />
+                            </td>
+                            <td className="px-3 py-2.5">
+                              <div className="flex items-center gap-2" style={{ paddingLeft: `${task.level * 14}px` }}>
                                 <button
-                                  className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/[0.08] text-white/68 transition hover:border-white/[0.18] hover:text-white"
-                                  onClick={(event) => {
+                                  className="inline-flex h-6 w-6 cursor-grab items-center justify-center rounded-lg border border-white/[0.08] text-white/62 transition hover:border-white/[0.16] hover:text-white active:cursor-grabbing disabled:opacity-40"
+                                  disabled={isHistoryView}
+                                  draggable={!isHistoryView}
+                                  onClick={(event) => event.stopPropagation()}
+                                  onDragStart={(event) => {
                                     event.stopPropagation();
-                                    toggleTaskCollapse(task.id);
+                                    setDraggingTaskId(task.id);
+                                    setDropTargetTaskId(task.id);
                                   }}
                                   type="button"
                                 >
-                                  {collapsedTaskIdSet.has(task.id) ? (
-                                    <ChevronRight className="h-3.5 w-3.5" />
-                                  ) : (
-                                    <ChevronDown className="h-3.5 w-3.5" />
-                                  )}
+                                  ::
                                 </button>
-                              ) : (
-                                <span className="inline-flex h-7 w-7" />
-                              )}
-                              <div>
-                                <div className="font-medium">{task.title}</div>
-                                <div className="mt-1 text-xs text-text-muted">{task.id}</div>
+                                {taskIndex.get(task.id)?.children.length ? (
+                                  <button
+                                    className="inline-flex h-6 w-6 items-center justify-center rounded-lg border border-white/[0.08] text-white/62 transition hover:border-white/[0.16] hover:text-white"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      toggleTaskCollapse(task.id);
+                                    }}
+                                    type="button"
+                                  >
+                                    {collapsedTaskIdSet.has(task.id) ? (
+                                      <ChevronRight className="h-3.5 w-3.5" />
+                                    ) : (
+                                      <ChevronDown className="h-3.5 w-3.5" />
+                                    )}
+                                  </button>
+                                ) : (
+                                  <span className="inline-flex h-6 w-6" />
+                                )}
+                                <div>
+                                  <div className="font-medium text-white/88">{task.title}</div>
+                                  <div className="mt-1 text-[11px] text-text-muted">{task.id}</div>
+                                </div>
                               </div>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3">{statusLabel(task.status)}</td>
-                          <td className="px-4 py-3">{task.assignee_user_id ?? "未分配"}</td>
-                          <td className="px-4 py-3">{task.weight}</td>
-                          <td className="px-4 py-3">{task.score ?? "-"}</td>
-                          <td className="px-4 py-3">
-                            {task.planned_due_at
-                              ? new Date(task.planned_due_at).toLocaleString("zh-CN")
-                              : "未设置"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                            </td>
+                            <td className="px-3 py-2.5">{statusLabel(task.status)}</td>
+                            <td className="px-3 py-2.5">{task.assignee_user_id ?? "未分配"}</td>
+                            <td className="px-3 py-2.5">{task.weight}</td>
+                            <td className="px-3 py-2.5">{task.score ?? "-"}</td>
+                            <td className="px-3 py-2.5">
+                              {task.planned_due_at ? new Date(task.planned_due_at).toLocaleString("zh-CN") : "未设置"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )
+              ) : (
+                <div className="rounded-[16px] border border-dashed border-white/[0.1] px-5 py-10 text-sm text-text-muted">
+                  <p>当前没有可展示的任务节点。</p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    {selectedStatuses.length ? (
+                      <button className="secondary-button" onClick={() => setSelectedStatuses([])} type="button">
+                        清空状态筛选
+                      </button>
+                    ) : null}
+                    {!isHistoryView ? (
+                      <button
+                        className="primary-button"
+                        onClick={() => {
+                          setComposeParentId(null);
+                          setComposeParentTitle(null);
+                        }}
+                        type="button"
+                      >
+                        先创建一个顶层任务
+                      </button>
+                    ) : (
+                      <button className="secondary-button" onClick={() => setMilestoneFilter("live")} type="button">
+                        返回当前任务视图
+                      </button>
+                    )}
+                  </div>
                 </div>
-              )
-            ) : (
-              <div className="rounded-3xl border border-dashed border-white/[0.12] px-5 py-10 text-sm text-text-muted">
-                <p>当前没有可展示的任务节点。</p>
-                <div className="mt-4 flex flex-wrap gap-3">
-                  {selectedStatuses.length ? (
-                    <button className="secondary-button" onClick={() => setSelectedStatuses([])} type="button">
-                      清空状态筛选
-                    </button>
-                  ) : null}
-                  {!isHistoryView ? (
-                    <button className="primary-button" onClick={() => setComposeParentId(null)} type="button">
-                      先创建一个顶层任务
-                    </button>
-                  ) : (
-                    <button className="secondary-button" onClick={() => setSelectedMilestoneId("live")} type="button">
-                      返回当前任务视图
-                    </button>
-                  )}
-                </div>
-              </div>
-            )}
-          </div>
-
-          <TaskDetailPanel
-            members={members}
-            onRefresh={loadWorkbench}
-            readOnly={isHistoryView}
-            task={selectedTask}
-            workspaceId={workspaceId}
-            workspaceRole={workspace.role}
-          />
+              )}
+            </div>
+          )}
         </div>
-      </section>
 
-      <div className="mt-6">
-        <WorkspaceMembersPanel
-          invitations={invitations}
+        <TaskDetailPanel
           members={members}
           onRefresh={loadWorkbench}
+          readOnly={isHistoryView}
+          task={selectedTask}
           workspaceId={workspaceId}
           workspaceRole={workspace.role}
         />
-      </div>
-    </main>
+      </section>
+    </div>
   );
 }

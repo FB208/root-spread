@@ -219,10 +219,10 @@ export function TaskDetailPanel({
 
   if (!task) {
     return (
-      <aside className="panel rounded-[28px] p-6 sm:p-8">
-        <p className="text-xs uppercase tracking-[0.28em] text-white/38">Task Detail</p>
-        <h2 className="mt-4 text-2xl font-semibold tracking-[-0.03em] text-white">节点详情侧栏</h2>
-        <p className="mt-4 text-sm leading-7 text-text-muted">
+      <aside className="panel rounded-[20px] p-4 xl:sticky xl:top-3 xl:h-[calc(100vh-1.5rem)] xl:overflow-auto">
+        <p className="text-[10px] uppercase tracking-[0.24em] text-white/34">Task Detail</p>
+        <h2 className="mt-2 text-lg font-semibold text-white">节点详情侧栏</h2>
+        <p className="mt-3 text-sm leading-7 text-text-muted">
           点击思维导图中的任意节点后，这里会显示详细信息、状态流转记录，以及可编辑字段。
         </p>
       </aside>
@@ -230,23 +230,23 @@ export function TaskDetailPanel({
   }
 
   return (
-    <aside className="panel rounded-[28px] p-6 sm:p-8">
+    <aside className="panel rounded-[20px] p-4 xl:sticky xl:top-3 xl:h-[calc(100vh-1.5rem)] xl:overflow-auto">
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs uppercase tracking-[0.28em] text-white/38">Task Detail</p>
-          <h2 className="mt-4 text-2xl font-semibold tracking-[-0.03em] text-white">{task.title}</h2>
-          <p className="mt-3 text-sm text-text-muted">
+          <p className="text-[10px] uppercase tracking-[0.24em] text-white/34">Task Detail</p>
+          <h2 className="mt-2 text-lg font-semibold text-white">{task.title}</h2>
+          <p className="mt-2 text-sm text-text-muted">
             当前状态：{transitionLabel(taskStatus)} · 子任务 {task.children.length} 个
           </p>
         </div>
         {readOnly ? (
-          <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-3 py-1 text-xs text-amber-100">
+          <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-xs text-amber-100">
             历史只读
           </span>
         ) : null}
       </div>
 
-      <form className="mt-6 space-y-4" onSubmit={handleSave}>
+      <form className="mt-4 space-y-3" onSubmit={handleSave}>
         <div>
           <label className="field-label" htmlFor="task-title">
             名称
@@ -265,7 +265,7 @@ export function TaskDetailPanel({
             内容（Markdown）
           </label>
           <textarea
-            className="field-input min-h-36 resize-y"
+            className="field-input min-h-32 resize-y"
             disabled={!canMutate}
             id="task-content"
             onChange={(event) => setContent(event.target.value)}
@@ -273,7 +273,7 @@ export function TaskDetailPanel({
           />
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <label className="field-label" htmlFor="task-assignee">
               负责人
@@ -308,7 +308,7 @@ export function TaskDetailPanel({
           </div>
         </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-3 sm:grid-cols-2">
           <div>
             <label className="field-label" htmlFor="task-weight">
               权重
@@ -344,9 +344,9 @@ export function TaskDetailPanel({
         </button>
       </form>
 
-      <div className="mt-6 rounded-[24px] border border-white/[0.08] bg-white/[0.04] p-4">
-        <p className="text-xs uppercase tracking-[0.24em] text-white/38">Status Actions</p>
-        <div className="mt-4 flex flex-wrap gap-3">
+      <div className="mt-4 rounded-[16px] border border-white/[0.08] bg-white/[0.03] p-3">
+        <p className="text-[10px] uppercase tracking-[0.22em] text-white/34">Status Actions</p>
+        <div className="mt-3 flex flex-wrap gap-2">
           {(["in_progress", "pending_review", "completed", "terminated"] as TaskStatus[]).map((status) => (
             <button
               key={status}
@@ -360,7 +360,7 @@ export function TaskDetailPanel({
           ))}
         </div>
         <textarea
-          className="field-input mt-4 min-h-24 resize-y"
+          className="field-input mt-3 min-h-24 resize-y"
           disabled={!canMutate || submitting}
           onChange={(event) => setRemark(event.target.value)}
           placeholder="退回备注为选填，其他状态也可以补充说明"
@@ -368,24 +368,22 @@ export function TaskDetailPanel({
         />
       </div>
 
-      <div className="mt-6 rounded-[24px] border border-white/[0.08] bg-white/[0.04] p-4">
+      <div className="mt-4 rounded-[16px] border border-white/[0.08] bg-white/[0.03] p-3">
         <div className="flex items-center justify-between gap-4">
-          <p className="text-xs uppercase tracking-[0.24em] text-white/38">Transitions</p>
+          <p className="text-[10px] uppercase tracking-[0.22em] text-white/34">Transitions</p>
           {loadingTransitions ? <span className="text-xs text-white/42">加载中...</span> : null}
         </div>
-        <div className="mt-4 space-y-3">
+        <div className="mt-3 space-y-2">
           {transitions.length ? (
             transitions.slice(0, 6).map((transition) => (
-                <div key={transition.id} className="rounded-2xl border border-white/[0.08] px-3 py-3">
-                  <p className="text-sm text-white/82">
-                    {transitionLabel(transition.from_status)} {"->"} {transitionLabel(transition.to_status)}
-                  </p>
+              <div key={transition.id} className="rounded-[14px] border border-white/[0.08] bg-black/10 px-3 py-2.5">
+                <p className="text-sm text-white/82">
+                  {transitionLabel(transition.from_status)} {"->"} {transitionLabel(transition.to_status)}
+                </p>
                 <p className="mt-1 text-xs text-white/42">
                   {new Date(transition.created_at).toLocaleString("zh-CN")} · {transition.action_type}
                 </p>
-                {transition.remark ? (
-                  <p className="mt-2 text-sm leading-6 text-text-muted">{transition.remark}</p>
-                ) : null}
+                {transition.remark ? <p className="mt-2 text-sm leading-6 text-text-muted">{transition.remark}</p> : null}
               </div>
             ))
           ) : (
@@ -395,7 +393,7 @@ export function TaskDetailPanel({
       </div>
 
       <button
-        className="secondary-button mt-6 w-full justify-center border-rose-400/18 text-rose-200 hover:border-rose-400/30 hover:text-rose-100"
+        className="secondary-button mt-4 w-full justify-center border-rose-400/18 text-rose-200 hover:border-rose-400/30 hover:text-rose-100"
         disabled={!canMutate || submitting}
         onClick={() => void handleDelete()}
         type="button"
@@ -403,8 +401,8 @@ export function TaskDetailPanel({
         删除当前任务
       </button>
 
-      {message ? <p className="mt-5 text-sm text-emerald-200">{message}</p> : null}
-      {error ? <p className="mt-3 text-sm text-rose-300">{error}</p> : null}
+      {message ? <p className="mt-4 text-sm text-emerald-200">{message}</p> : null}
+      {error ? <p className="mt-2 text-sm text-rose-300">{error}</p> : null}
     </aside>
   );
 }
