@@ -1,6 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 APP_DIR = Path(__file__).resolve().parents[3]
@@ -12,8 +13,9 @@ class Settings(BaseSettings):
     app_env: str = "development"
     api_v1_prefix: str = "/api/v1"
     app_host: str = "0.0.0.0"
-    app_port: int = 8000
+    app_port: int = 18000
     frontend_url: str = "http://localhost:3000"
+    cors_origins_raw: str = Field(default="", validation_alias="CORS_ORIGINS")
     database_url: str = "mysql+pymysql://rootspread:rootspread@127.0.0.1:3306/rootspread"
     redis_url: str = "redis://127.0.0.1:6379/0"
     jwt_secret: str = "change-me"
@@ -34,7 +36,14 @@ class Settings(BaseSettings):
 
     @property
     def cors_origins(self) -> list[str]:
-        return [self.frontend_url]
+        origins = [self.frontend_url]
+
+        if self.cors_origins_raw:
+            origins.extend(
+                origin.strip() for origin in self.cors_origins_raw.split(",") if origin.strip()
+            )
+
+        return list(dict.fromkeys(origins))
 
 
 @lru_cache(maxsize=1)

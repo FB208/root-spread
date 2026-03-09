@@ -17,13 +17,15 @@ export default function RegisterPage() {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
+    const normalizedDisplayName = displayName.trim();
+
     try {
       setLoading(true);
       setError(null);
       const response = await apiRequest<RegisterResponse>("/auth/register", {
         method: "POST",
         json: {
-          display_name: displayName,
+          ...(normalizedDisplayName ? { display_name: normalizedDisplayName } : {}),
           email,
           password,
         },

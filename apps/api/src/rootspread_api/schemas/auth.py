@@ -10,10 +10,14 @@ class RegisterRequest(BaseModel):
     password: str = Field(min_length=8, max_length=128)
     display_name: str | None = Field(default=None, min_length=2, max_length=120)
 
-    @field_validator("display_name")
+    @field_validator("display_name", mode="before")
     @classmethod
     def normalize_display_name(cls, value: str | None) -> str | None:
-        return value.strip() if value else value
+        if value is None:
+            return None
+
+        normalized = value.strip()
+        return normalized or None
 
 
 class LoginRequest(BaseModel):
