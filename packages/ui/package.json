@@ -1,0 +1,13 @@
+{
+  "name": "@rootspread/ui",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "description": "Shared UI package for RootSpread",
+  "private": true
+}

@@ -1,0 +1,184 @@
+@import "tailwindcss";
+
+:root {
+  --background: #050814;
+  --foreground: #f5f7ff;
+  --panel: rgba(9, 14, 28, 0.72);
+  --panel-strong: rgba(12, 18, 36, 0.92);
+  --border-subtle: rgba(255, 255, 255, 0.1);
+  --text-muted: #9ba9cf;
+  --accent: #7aa2ff;
+  --accent-secondary: #8b5cf6;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-panel: var(--panel);
+  --color-panel-strong: var(--panel-strong);
+  --color-border-subtle: var(--border-subtle);
+  --color-text-muted: var(--text-muted);
+  --color-accent: var(--accent);
+  --color-accent-secondary: var(--accent-secondary);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  background: var(--background);
+}
+
+body {
+  min-height: 100vh;
+  overflow-x: hidden;
+  background:
+    radial-gradient(circle at top left, rgba(122, 162, 255, 0.2), transparent 30%),
+    radial-gradient(circle at top right, rgba(139, 92, 246, 0.14), transparent 28%),
+    linear-gradient(180deg, #040712 0%, #060917 42%, #0a1020 100%);
+  color: var(--foreground);
+  font-family: var(--font-geist-sans), sans-serif;
+}
+
+body::before,
+body::after {
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: fixed;
+}
+
+body::before {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 120px 120px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.5), transparent 92%);
+  opacity: 0.16;
+}
+
+body::after {
+  background:
+    radial-gradient(circle at 20% 15%, rgba(122, 162, 255, 0.18), transparent 18%),
+    radial-gradient(circle at 80% 8%, rgba(139, 92, 246, 0.14), transparent 16%),
+    radial-gradient(circle at 50% 100%, rgba(31, 41, 55, 0.32), transparent 32%);
+  filter: blur(24px);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.panel {
+  border: 1px solid var(--border-subtle);
+  background: linear-gradient(180deg, rgba(10, 15, 31, 0.82), rgba(7, 11, 23, 0.74));
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.04),
+    0 24px 80px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(18px);
+}
+
+.section-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  padding: 0.45rem 0.8rem;
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 0.72rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+}
+
+.field-label {
+  display: block;
+  margin-bottom: 0.75rem;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.88rem;
+}
+
+.field-input {
+  width: 100%;
+  min-height: 3rem;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 1.1rem;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--foreground);
+  outline: none;
+  padding: 0.9rem 1rem;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.field-input::placeholder {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.field-input:focus {
+  border-color: rgba(122, 162, 255, 0.68);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: 0 0 0 4px rgba(122, 162, 255, 0.14);
+}
+
+.primary-button,
+.secondary-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-height: 2.9rem;
+  border-radius: 999px;
+  padding: 0 1.1rem;
+  font-size: 0.92rem;
+  transition:
+    border-color 180ms ease,
+    background-color 180ms ease,
+    color 180ms ease,
+    opacity 180ms ease;
+}
+
+.primary-button {
+  border: 1px solid transparent;
+  background: linear-gradient(90deg, #eef4ff 0%, #d9e3ff 100%);
+  color: #08111e;
+}
+
+.primary-button:hover {
+  background: linear-gradient(90deg, #ffffff 0%, #e5ecff 100%);
+}
+
+.secondary-button {
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(255, 255, 255, 0.76);
+}
+
+.secondary-button:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+  color: rgba(255, 255, 255, 0.96);
+}
+
+.primary-button:disabled,
+.secondary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.gradient-text {
+  background: linear-gradient(90deg, #eef4ff 0%, #97b4ff 45%, #b794f6 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.react-flow__handle {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}

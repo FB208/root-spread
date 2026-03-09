@@ -1,0 +1,34 @@
+{
+  "name": "root-spread",
+  "version": "1.0.0",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "pnpm run test:web && pnpm run test:api",
+    "dev:web": "pnpm --dir apps/web dev",
+    "build:web": "pnpm --dir apps/web build",
+    "lint:web": "pnpm --dir apps/web lint",
+    "dev:api": "uv run --project apps/api uvicorn rootspread_api.main:app --reload --host 0.0.0.0 --port 8000",
+    "lint:api": "uv run --project apps/api ruff check",
+    "format:api": "uv run --project apps/api ruff format",
+    "dev": "powershell -ExecutionPolicy Bypass -File scripts/windows/dev.ps1",
+    "test:api": "uv run --project apps/api pytest",
+    "test:web": "pnpm --dir apps/web test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/FB208/root-spread.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/FB208/root-spread/issues"
+  },
+  "homepage": "https://github.com/FB208/root-spread#readme",
+  "description": "RootSpread monorepo",
+  "private": true,
+  "packageManager": "pnpm@10.4.1"
+}
