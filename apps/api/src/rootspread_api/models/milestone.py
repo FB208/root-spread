@@ -35,7 +35,7 @@ class MilestoneSnapshot(IdMixin, TimestampMixin, Base):
         index=True,
     )
     snapshot_name: Mapped[str] = mapped_column(String(160))
-    snapshot_data: Mapped[list[dict]] = mapped_column(JSON)
+    snapshot_data: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     archived_task_count: Mapped[int] = mapped_column(Integer, default=0)
     created_by_user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
 

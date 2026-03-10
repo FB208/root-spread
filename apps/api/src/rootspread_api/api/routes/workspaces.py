@@ -12,7 +12,7 @@ from rootspread_api.core.time import utc_now
 from rootspread_api.models.audit import AuditLog
 from rootspread_api.models.user import User
 from rootspread_api.models.workspace import Workspace, WorkspaceInvitation, WorkspaceMember
-from rootspread_api.models.task import TaskNode, TaskStatus
+from rootspread_api.models.task import TaskNode, TaskNodeKind, TaskStatus
 from rootspread_api.models.milestone import Milestone
 from rootspread_api.schemas.audit import AuditLogRead, WorkspaceStatsRead
 from rootspread_api.schemas.common import MessageResponse
@@ -32,6 +32,7 @@ from rootspread_api.schemas.workspace import (
 from rootspread_api.services.auth_tokens import should_expose_debug_token
 from rootspread_api.services.audit_service import log_audit_event
 from rootspread_api.services.email_service import send_workspace_invitation_email
+from rootspread_api.services.task_service import ensure_system_root
 from rootspread_api.services.workspace_service import ensure_unique_workspace_slug
 
 router = APIRouter(prefix="/workspaces", tags=["workspaces"])
@@ -76,6 +77,7 @@ def create_workspace(
 
     membership = WorkspaceMember(workspace_id=workspace.id, user_id=current_user.id, role="owner")
     session.add(membership)
+    ensure_system_root(session, workspace.id, current_user.id)
     log_audit_event(
         session,
         workspace_id=workspace.id,
@@ -157,23 +159,22 @@ def get_workspace_stats(
 ) -> WorkspaceStatsRead:
     require_workspace_access(session, workspace_id, current_user.id)
 
+    live_task_filters = (
+        TaskNode.workspace_id == workspace_id,
+        TaskNode.archived_at.is_(None),
+        TaskNode.node_kind != TaskNodeKind.SYSTEM_ROOT.value,
+    )
+    archived_task_filters = (
+        TaskNode.workspace_id == workspace_id,
+        TaskNode.archived_at.is_not(None),
+        TaskNode.node_kind != TaskNodeKind.SYSTEM_ROOT.value,
+    )
+
     active_task_count = (
-        session.scalar(
-            select(func.count(TaskNode.id)).where(
-                TaskNode.workspace_id == workspace_id,
-                TaskNode.archived_at.is_(None),
-            )
-        )
-        or 0
+        session.scalar(select(func.count(TaskNode.id)).where(*live_task_filters)) or 0
     )
     archived_task_count = (
-        session.scalar(
-            select(func.count(TaskNode.id)).where(
-                TaskNode.workspace_id == workspace_id,
-                TaskNode.archived_at.is_not(None),
-            )
-        )
-        or 0
+        session.scalar(select(func.count(TaskNode.id)).where(*archived_task_filters)) or 0
     )
     member_count = (
         session.scalar(
@@ -204,8 +205,7 @@ def get_workspace_stats(
     in_progress_task_count = (
         session.scalar(
             select(func.count(TaskNode.id)).where(
-                TaskNode.workspace_id == workspace_id,
-                TaskNode.archived_at.is_(None),
+                *live_task_filters,
                 TaskNode.status == TaskStatus.IN_PROGRESS.value,
             )
         )
@@ -214,8 +214,7 @@ def get_workspace_stats(
     pending_review_task_count = (
         session.scalar(
             select(func.count(TaskNode.id)).where(
-                TaskNode.workspace_id == workspace_id,
-                TaskNode.archived_at.is_(None),
+                *live_task_filters,
                 TaskNode.status == TaskStatus.PENDING_REVIEW.value,
             )
         )
@@ -224,8 +223,7 @@ def get_workspace_stats(
     completed_task_count = (
         session.scalar(
             select(func.count(TaskNode.id)).where(
-                TaskNode.workspace_id == workspace_id,
-                TaskNode.archived_at.is_(None),
+                *live_task_filters,
                 TaskNode.status == TaskStatus.COMPLETED.value,
             )
         )
@@ -234,8 +232,7 @@ def get_workspace_stats(
     terminated_task_count = (
         session.scalar(
             select(func.count(TaskNode.id)).where(
-                TaskNode.workspace_id == workspace_id,
-                TaskNode.archived_at.is_(None),
+                *live_task_filters,
                 TaskNode.status == TaskStatus.TERMINATED.value,
             )
         )

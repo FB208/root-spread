@@ -1,5 +1,5 @@
 param(
-    [ValidateSet("web", "api", "all")]
+    [ValidateSet("web", "api", "collab", "all")]
     [string]$Target = "all"
 )
 
@@ -18,6 +18,11 @@ function Start-Api {
     pnpm run dev:api
 }
 
+function Start-Collab {
+    Set-Location $RepoRoot
+    pnpm run dev:collab
+}
+
 switch ($Target) {
     "web" {
         Start-Web
@@ -25,9 +30,14 @@ switch ($Target) {
     "api" {
         Start-Api
     }
+    "collab" {
+        Start-Collab
+    }
     "all" {
         $command = "Set-Location '$RepoRoot'; pnpm run dev:api"
         Start-Process powershell.exe -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", $command | Out-Null
+        $collabCommand = "Set-Location '$RepoRoot'; pnpm run dev:collab"
+        Start-Process powershell.exe -ArgumentList "-NoExit", "-ExecutionPolicy", "Bypass", "-Command", $collabCommand | Out-Null
         Start-Web
     }
 }

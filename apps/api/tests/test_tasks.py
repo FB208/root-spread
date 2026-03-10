@@ -1,11 +1,12 @@
 from fastapi.testclient import TestClient
 
-from .helpers import auth_headers, create_verified_user, create_workspace
+from .helpers import auth_headers, create_verified_user, create_workspace, get_system_root
 
 
 def test_task_tree_rules_and_reorder(client: TestClient) -> None:
     owner = create_verified_user(client, "task-owner@rootspread.dev", "Task Owner")
     workspace = create_workspace(client, owner["access_token"], name="Task Engine")
+    root = get_system_root(client, owner["access_token"], workspace["id"])
 
     parent_response = client.post(
         f"/api/v1/workspaces/{workspace['id']}/tasks",
@@ -14,6 +15,8 @@ def test_task_tree_rules_and_reorder(client: TestClient) -> None:
     )
     assert parent_response.status_code == 201
     parent_task = parent_response.json()
+    assert parent_task["parent_id"] == root["id"]
+    assert parent_task["node_kind"] == "task"
 
     child_a_response = client.post(
         f"/api/v1/workspaces/{workspace['id']}/tasks",
@@ -51,8 +54,8 @@ def test_task_tree_rules_and_reorder(client: TestClient) -> None:
         headers=auth_headers(owner["access_token"]),
     )
     assert task_tree_response.status_code == 200
-    tree = task_tree_response.json()
-    assert tree[0]["status"] == "completed"
+    root_node = task_tree_response.json()["root"]
+    assert root_node["children"][0]["status"] == "completed"
 
     new_child_response = client.post(
         f"/api/v1/workspaces/{workspace['id']}/tasks",
@@ -67,7 +70,7 @@ def test_task_tree_rules_and_reorder(client: TestClient) -> None:
         headers=auth_headers(owner["access_token"]),
     )
     assert refreshed_tree.status_code == 200
-    assert refreshed_tree.json()[0]["status"] == "in_progress"
+    assert refreshed_tree.json()["root"]["children"][0]["status"] == "in_progress"
 
     reorder_response = client.post(
         f"/api/v1/workspaces/{workspace['id']}/tasks/reorder",
@@ -84,10 +87,10 @@ def test_task_tree_rules_and_reorder(client: TestClient) -> None:
         headers=auth_headers(owner["access_token"]),
     )
     assert filtered_response.status_code == 200
-    filtered_tree = filtered_response.json()
-    assert filtered_tree[0]["matched_filter"] is True
-    assert len(filtered_tree[0]["children"]) == 1
-    assert filtered_tree[0]["children"][0]["matched_filter"] is True
+    filtered_tree = filtered_response.json()["root"]
+    assert filtered_tree["matched_filter"] is False
+    assert len(filtered_tree["children"]) == 1
+    assert filtered_tree["children"][0]["matched_filter"] is True
 
     delete_response = client.delete(
         f"/api/v1/workspaces/{workspace['id']}/tasks/{new_child['id']}",
@@ -100,7 +103,13 @@ def test_task_tree_rules_and_reorder(client: TestClient) -> None:
         headers=auth_headers(owner["access_token"]),
     )
     assert after_delete_response.status_code == 200
-    assert len(after_delete_response.json()[0]["children"]) == 2
+    assert len(after_delete_response.json()["root"]["children"][0]["children"]) == 2
+
+    delete_root_response = client.delete(
+        f"/api/v1/workspaces/{workspace['id']}/tasks/{root['id']}",
+        headers=auth_headers(owner["access_token"]),
+    )
+    assert delete_root_response.status_code == 400
 
 
 def test_pending_review_can_be_rejected_without_remark(client: TestClient) -> None:
@@ -199,3 +208,113 @@ def test_bulk_task_actions(client: TestClient) -> None:
     )
     assert empty_response.status_code == 200
     assert empty_response.json() == []
+
+
+def test_system_root_only_allows_title_and_content_updates(client: TestClient) -> None:
+    owner = create_verified_user(client, "root-owner@rootspread.dev", "Root Owner")
+    workspace = create_workspace(client, owner["access_token"], name="System Root Workspace")
+    root = get_system_root(client, owner["access_token"], workspace["id"])
+
+    rename_response = client.patch(
+        f"/api/v1/workspaces/{workspace['id']}/tasks/{root['id']}",
+        json={"title": "项目总览", "content_markdown": "系统入口"},
+        headers=auth_headers(owner["access_token"]),
+    )
+    assert rename_response.status_code == 200
+    assert rename_response.json()["title"] == "项目总览"
+
+    invalid_update_response = client.patch(
+        f"/api/v1/workspaces/{workspace['id']}/tasks/{root['id']}",
+        json={"weight": 10},
+        headers=auth_headers(owner["access_token"]),
+    )
+    assert invalid_update_response.status_code == 400
+
+    invalid_status_response = client.post(
+        f"/api/v1/workspaces/{workspace['id']}/tasks/{root['id']}/status",
+        json={"status": "completed"},
+        headers=auth_headers(owner["access_token"]),
+    )
+    assert invalid_status_response.status_code == 400
+
+
+def test_task_sync_snapshot_changes_and_stream(client: TestClient) -> None:
+    owner = create_verified_user(client, "sync-owner@rootspread.dev", "Sync Owner")
+    workspace = create_workspace(client, owner["access_token"], name="Sync Workspace")
+    root = get_system_root(client, owner["access_token"], workspace["id"])
+
+    snapshot_response = client.get(
+        f"/api/v1/workspaces/{workspace['id']}/tasks/snapshot",
+        headers=auth_headers(owner["access_token"]),
+    )
+    assert snapshot_response.status_code == 200
+    snapshot_payload = snapshot_response.json()
+    assert snapshot_payload["root_id"] == root["id"]
+    assert snapshot_payload["tasks"][0]["id"] == root["id"]
+
+    create_response = client.post(
+        f"/api/v1/workspaces/{workspace['id']}/tasks/ops",
+        json={
+            "type": "create_task",
+            "parent_id": root["id"],
+            "title": "Realtime Task",
+            "op_id": "op-create-1",
+        },
+        headers=auth_headers(owner["access_token"]),
+    )
+    assert create_response.status_code == 200
+    create_changeset = create_response.json()
+    assert create_changeset["op_type"] == "create_task"
+    assert create_changeset["op_id"] == "op-create-1"
+    assert any(task["title"] == "Realtime Task" for task in create_changeset["upserts"])
+
+    changes_response = client.get(
+        f"/api/v1/workspaces/{workspace['id']}/tasks/changes?since=0",
+        headers=auth_headers(owner["access_token"]),
+    )
+    assert changes_response.status_code == 200
+    changes_payload = changes_response.json()
+    assert changes_payload["events"][-1]["op_type"] == "create_task"
+    assert changes_payload["events"][-1]["sync_seq"] == create_changeset["sync_seq"]
+
+    with client.websocket_connect(
+        f"/api/v1/workspaces/{workspace['id']}/tasks/stream?token={owner['access_token']}&since=0"
+    ) as websocket:
+        first_message = websocket.receive_json()
+        assert first_message["op_type"] == "create_task"
+        ready_message = websocket.receive_json()
+        assert ready_message["type"] == "ready"
+        assert ready_message["sync_seq"] >= create_changeset["sync_seq"]
+
+
+def test_collab_document_persistence_endpoint(client: TestClient) -> None:
+    owner = create_verified_user(client, "collab-owner@rootspread.dev", "Collab Owner")
+    workspace = create_workspace(client, owner["access_token"], name="Collab Workspace")
+    task_response = client.post(
+        f"/api/v1/workspaces/{workspace['id']}/tasks",
+        json={"title": "Collaborative Doc"},
+        headers=auth_headers(owner["access_token"]),
+    )
+    assert task_response.status_code == 201
+    task = task_response.json()
+
+    document_response = client.get(
+        f"/api/v1/workspaces/{workspace['id']}/tasks/{task['id']}/document",
+        headers=auth_headers(owner["access_token"]),
+    )
+    assert document_response.status_code == 200
+    assert document_response.json()["content_markdown"] == ""
+
+    persist_response = client.put(
+        f"/api/v1/internal/collab/workspaces/{workspace['id']}/tasks/{task['id']}/document",
+        json={"content_markdown": "# 协同正文\n\n多人实时编辑"},
+        headers={"X-Collab-Secret": "change-me-collab"},
+    )
+    assert persist_response.status_code == 200
+
+    refreshed_document_response = client.get(
+        f"/api/v1/workspaces/{workspace['id']}/tasks/{task['id']}/document",
+        headers=auth_headers(owner["access_token"]),
+    )
+    assert refreshed_document_response.status_code == 200
+    assert refreshed_document_response.json()["content_markdown"].startswith("# 协同正文")

@@ -3,12 +3,14 @@ from datetime import timedelta
 from fastapi.testclient import TestClient
 
 from rootspread_api.core.time import utc_now
-from .helpers import auth_headers, create_verified_user, create_workspace
+from .helpers import auth_headers, create_verified_user, create_workspace, get_system_root
 
 
 def test_create_milestone_and_archive_finished_tasks(client: TestClient) -> None:
     owner = create_verified_user(client, "milestone-owner@rootspread.dev", "Milestone Owner")
     workspace = create_workspace(client, owner["access_token"], name="Milestone Workspace")
+    root = get_system_root(client, owner["access_token"], workspace["id"])
+    assert root["node_kind"] == "system_root"
 
     parent = client.post(
         f"/api/v1/workspaces/{workspace['id']}/tasks",
@@ -72,10 +74,11 @@ def test_create_milestone_and_archive_finished_tasks(client: TestClient) -> None
         headers=auth_headers(owner["access_token"]),
     )
     assert active_tree_response.status_code == 200
-    active_tree = active_tree_response.json()
-    assert len(active_tree) == 1
-    assert len(active_tree[0]["children"]) == 1
-    assert active_tree[0]["children"][0]["id"] == active_child["id"]
+    active_tree = active_tree_response.json()["root"]
+    assert len(active_tree["children"]) == 1
+    assert active_tree["children"][0]["id"] == parent["id"]
+    assert len(active_tree["children"][0]["children"]) == 1
+    assert active_tree["children"][0]["children"][0]["id"] == active_child["id"]
 
     milestones_response = client.get(
         f"/api/v1/workspaces/{workspace['id']}/milestones",
@@ -89,18 +92,21 @@ def test_create_milestone_and_archive_finished_tasks(client: TestClient) -> None
         headers=auth_headers(owner["access_token"]),
     )
     assert milestone_tree_response.status_code == 200
-    milestone_tree = milestone_tree_response.json()["tree"]
-    assert milestone_tree[0]["matched_filter"] is False
-    assert len(milestone_tree[0]["children"]) == 2
+    milestone_tree = milestone_tree_response.json()["root"]
+    assert milestone_tree["node_kind"] == "system_root"
+    assert milestone_tree["matched_filter"] is False
+    assert len(milestone_tree["children"]) == 1
+    assert len(milestone_tree["children"][0]["children"]) == 2
 
     filtered_snapshot_response = client.get(
         f"/api/v1/workspaces/{workspace['id']}/milestones/{milestone['id']}/tree?status=completed",
         headers=auth_headers(owner["access_token"]),
     )
     assert filtered_snapshot_response.status_code == 200
-    filtered_tree = filtered_snapshot_response.json()["tree"]
-    assert len(filtered_tree[0]["children"]) == 1
-    assert filtered_tree[0]["children"][0]["status"] == "completed"
+    filtered_tree = filtered_snapshot_response.json()["root"]
+    assert len(filtered_tree["children"]) == 1
+    assert len(filtered_tree["children"][0]["children"]) == 1
+    assert filtered_tree["children"][0]["children"][0]["status"] == "completed"
 
     stats_response = client.get(
         f"/api/v1/workspaces/{workspace['id']}/stats",
@@ -109,6 +115,7 @@ def test_create_milestone_and_archive_finished_tasks(client: TestClient) -> None
     assert stats_response.status_code == 200
     stats_payload = stats_response.json()
     assert stats_payload["archived_task_count"] == 2
+    assert stats_payload["active_task_count"] == 2
     assert stats_payload["milestone_count"] == 1
 
     audit_response = client.get(

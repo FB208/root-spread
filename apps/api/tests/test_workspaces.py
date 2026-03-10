@@ -1,6 +1,6 @@
 from fastapi.testclient import TestClient
 
-from .helpers import auth_headers, create_verified_user
+from .helpers import auth_headers, create_verified_user, get_system_root
 
 
 def test_workspace_creation_invitation_and_acceptance(client: TestClient) -> None:
@@ -20,6 +20,11 @@ def test_workspace_creation_invitation_and_acceptance(client: TestClient) -> Non
     )
     assert workspace_list_response.status_code == 200
     assert workspace_list_response.json()[0]["slug"] == "rootspread-core"
+
+    root = get_system_root(client, owner["access_token"], workspace["id"])
+    assert root["title"] == "根节点"
+    assert root["node_kind"] == "system_root"
+    assert root["parent_id"] is None
 
     invite_response = client.post(
         f"/api/v1/workspaces/{workspace['id']}/invitations",

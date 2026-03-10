@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from rootspread_api.api.routes import (
     auth_router,
+    collab_internal_router,
     health_router,
     milestone_router,
     task_router,
@@ -52,6 +53,7 @@ def create_application() -> FastAPI:
 
     application.include_router(health_router, prefix=settings.api_v1_prefix)
     application.include_router(auth_router, prefix=settings.api_v1_prefix)
+    application.include_router(collab_internal_router, prefix=settings.api_v1_prefix)
     application.include_router(milestone_router, prefix=settings.api_v1_prefix)
     application.include_router(task_router, prefix=settings.api_v1_prefix)
     application.include_router(workspace_router, prefix=settings.api_v1_prefix)

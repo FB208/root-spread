@@ -94,7 +94,9 @@ def create_milestone(
         MilestoneSnapshot(
             milestone_id=milestone.id,
             snapshot_name=f"{payload.name} snapshot",
-            snapshot_data=[node.model_dump(mode="json") for node in snapshot_tree],
+            snapshot_data=snapshot_tree.model_dump(mode="json")
+            if snapshot_tree is not None
+            else None,
             archived_task_count=len(archivable_tasks),
             created_by_user_id=current_user.id,
         )
@@ -156,13 +158,13 @@ def get_milestone_tree(
     )
     if snapshot is None:
         return MilestoneTreeResponse.model_validate(
-            {"milestone": MilestoneRead.model_validate(milestone).model_dump(), "tree": []}
+            {"milestone": MilestoneRead.model_validate(milestone).model_dump(), "root": None}
         )
 
-    tree = filter_snapshot_tree(snapshot.snapshot_data, normalize_status_filters(status_filters))
+    root = filter_snapshot_tree(snapshot.snapshot_data, normalize_status_filters(status_filters))
     return MilestoneTreeResponse.model_validate(
         {
             "milestone": MilestoneRead.model_validate(milestone).model_dump(),
-            "tree": tree,
+            "root": root,
         }
     )

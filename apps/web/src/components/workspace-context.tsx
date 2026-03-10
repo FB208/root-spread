@@ -18,7 +18,7 @@ import {
   type WorkspaceMember,
   apiRequest,
 } from "@/lib/api";
-import { getStoredSession } from "@/lib/auth-storage";
+import { getCachedSession } from "@/lib/auth-storage";
 
 type WorkspaceContextValue = {
   accessToken: string | null;
@@ -49,7 +49,7 @@ export function WorkspaceProvider({ children, workspaceId }: WorkspaceProviderPr
   const [error, setError] = useState<string | null>(null);
 
   const refreshWorkspaceData = useCallback(async () => {
-    const storedSession = getStoredSession();
+    const storedSession = await getCachedSession();
     setSession(storedSession);
 
     if (!storedSession?.access_token) {

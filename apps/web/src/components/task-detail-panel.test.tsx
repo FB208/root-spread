@@ -3,6 +3,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import { TaskDetailPanel } from "@/components/task-detail-panel";
 
+vi.mock("@/components/task-document-editor", () => ({
+  TaskDocumentEditor: () => <div data-testid="task-document-editor" />,
+}));
+
 vi.mock("@/lib/api", async () => {
   const actual = await vi.importActual<typeof import("@/lib/api")>("@/lib/api");
   return {
@@ -11,32 +15,35 @@ vi.mock("@/lib/api", async () => {
   };
 });
 
-vi.mock("@/lib/auth-storage", () => ({
-  getStoredSession: vi.fn(() => null),
-}));
-
 describe("TaskDetailPanel", () => {
   it("shows empty state when no task is selected", () => {
     render(
       <TaskDetailPanel
+        accessToken="token"
         members={[]}
-        onRefresh={vi.fn().mockResolvedValue(undefined)}
+        onDeleteTask={vi.fn().mockResolvedValue(undefined)}
+        onPatchTask={vi.fn().mockResolvedValue(undefined)}
+        onSetTaskStatus={vi.fn().mockResolvedValue(undefined)}
         readOnly={false}
         task={null}
+        userName="Tester"
         workspaceId="ws-1"
         workspaceRole="owner"
       />,
     );
 
-    expect(screen.getByText("节点详情侧栏")).toBeInTheDocument();
-    expect(screen.getByText(/点击思维导图中的任意节点后/)).toBeInTheDocument();
+    expect(screen.getByText("节点详情")).toBeInTheDocument();
+    expect(screen.getByText(/快捷键：`Tab` 新建下级/)).toBeInTheDocument();
   });
 
   it("disables editing in read-only history mode", () => {
     render(
       <TaskDetailPanel
+        accessToken="token"
         members={[]}
-        onRefresh={vi.fn().mockResolvedValue(undefined)}
+        onDeleteTask={vi.fn().mockResolvedValue(undefined)}
+        onPatchTask={vi.fn().mockResolvedValue(undefined)}
+        onSetTaskStatus={vi.fn().mockResolvedValue(undefined)}
         readOnly
         task={{
           id: "task-1",
@@ -46,8 +53,10 @@ describe("TaskDetailPanel", () => {
           path: "task-1",
           depth: 0,
           sort_order: 0,
+          meta_revision: 1,
           title: "历史任务",
           content_markdown: "内容",
+          node_kind: "task",
           created_by_user_id: "user-1",
           assignee_user_id: null,
           planned_due_at: null,
@@ -62,12 +71,14 @@ describe("TaskDetailPanel", () => {
           matched_filter: true,
           children: [],
         }}
+        userName="Tester"
         workspaceId="ws-1"
         workspaceRole="owner"
       />,
     );
 
     expect(screen.getByText("历史只读")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "保存节点详情" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "保存节点属性" })).toBeDisabled();
+    expect(screen.getByTestId("task-document-editor")).toBeInTheDocument();
   });
 });

@@ -1,25 +1,32 @@
 "use client";
 
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 
-import {
-  type MessageResponse,
-  type TaskStatus,
-  type TaskStatusTransition,
-  type TaskTreeNode,
-  type WorkspaceItem,
-  type WorkspaceMember,
-  apiRequest,
-} from "@/lib/api";
-import { getStoredSession } from "@/lib/auth-storage";
+import { TaskDocumentEditor } from "@/components/task-document-editor";
+import { type TaskStatus, type TaskStatusTransition, type TaskTreeNode, type WorkspaceItem, type WorkspaceMember, apiRequest } from "@/lib/api";
 
 type TaskDetailPanelProps = {
+  accessToken: string | null;
+  autoFocusToken?: number;
+  members: WorkspaceMember[];
+  onDeleteTask: (taskId: string) => Promise<void>;
+  onPatchTask: (
+    taskId: string,
+    patch: {
+      assignee_user_id?: string | null;
+      planned_due_at?: string | null;
+      score?: number | null;
+      title?: string;
+      weight?: number;
+    },
+  ) => Promise<void>;
+  onSetTaskStatus: (taskId: string, status: TaskStatus, remark?: string | null) => Promise<void>;
+  readOnly: boolean;
+  task: TaskTreeNode | null;
+  userName: string;
+  variant?: "floating" | "sidebar";
   workspaceId: string;
   workspaceRole: WorkspaceItem["role"];
-  task: TaskTreeNode | null;
-  members: WorkspaceMember[];
-  readOnly: boolean;
-  onRefresh: () => Promise<void>;
 };
 
 function toDateTimeLocal(value: string | null) {
@@ -50,33 +57,42 @@ function transitionLabel(status: string | null) {
 }
 
 export function TaskDetailPanel({
+  accessToken,
+  autoFocusToken = 0,
+  members,
+  onDeleteTask,
+  onPatchTask,
+  onSetTaskStatus,
+  readOnly,
+  task,
+  userName,
+  variant = "sidebar",
   workspaceId,
   workspaceRole,
-  task,
-  members,
-  readOnly,
-  onRefresh,
 }: TaskDetailPanelProps) {
+  const titleInputRef = useRef<HTMLInputElement | null>(null);
   const [title, setTitle] = useState("");
-  const [content, setContent] = useState("");
   const [assigneeUserId, setAssigneeUserId] = useState("");
   const [plannedDueAt, setPlannedDueAt] = useState("");
   const [weight, setWeight] = useState("0");
   const [score, setScore] = useState("");
   const [remark, setRemark] = useState("");
+  const [transitionCache, setTransitionCache] = useState<Record<string, TaskStatusTransition[]>>({});
   const [transitions, setTransitions] = useState<TaskStatusTransition[]>([]);
   const [loadingTransitions, setLoadingTransitions] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
+  const isSystemRoot = task?.node_kind === "system_root";
+  const isOptimisticTask = task?.id.startsWith("optimistic:") ?? false;
   const canScore = workspaceRole === "owner" || workspaceRole === "admin";
-  const canMutate = !readOnly && task !== null;
+  const canMutate = !readOnly && task !== null && !isOptimisticTask;
+  const canDelete = canMutate && !isSystemRoot;
   const taskStatus = task?.status ?? "in_progress";
 
   useEffect(() => {
     setTitle(task?.title ?? "");
-    setContent(task?.content_markdown ?? "");
     setAssigneeUserId(task?.assignee_user_id ?? "");
     setPlannedDueAt(toDateTimeLocal(task?.planned_due_at ?? null));
     setWeight(task ? String(task.weight) : "0");
@@ -87,14 +103,35 @@ export function TaskDetailPanel({
   }, [task]);
 
   useEffect(() => {
-    const session = getStoredSession();
-    if (!task || !session?.access_token) {
+    if (!task || !autoFocusToken || variant !== "sidebar") {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      titleInputRef.current?.focus();
+      titleInputRef.current?.select();
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [autoFocusToken, task, variant]);
+
+  useEffect(() => {
+    if (readOnly || !task || isSystemRoot || isOptimisticTask || !accessToken) {
       setTransitions([]);
       return;
     }
 
+    const currentToken = accessToken;
+
+    const cachedTransitions = transitionCache[task.id];
+    if (cachedTransitions) {
+      setTransitions(cachedTransitions);
+      return;
+    }
+
+    setTransitions([]);
+
     const currentTask = task;
-    const currentSession = session;
     let cancelled = false;
 
     async function loadTransitions() {
@@ -102,9 +139,13 @@ export function TaskDetailPanel({
         setLoadingTransitions(true);
         const response = await apiRequest<TaskStatusTransition[]>(
           `/workspaces/${workspaceId}/tasks/${currentTask.id}/transitions`,
-          { token: currentSession.access_token },
+          { token: currentToken },
         );
         if (!cancelled) {
+          setTransitionCache((current) => ({
+            ...current,
+            [currentTask.id]: response,
+          }));
           setTransitions(response);
         }
       } catch {
@@ -123,7 +164,7 @@ export function TaskDetailPanel({
     return () => {
       cancelled = true;
     };
-  }, [task, workspaceId]);
+  }, [accessToken, isOptimisticTask, isSystemRoot, readOnly, task, transitionCache, workspaceId]);
 
   const memberOptions = useMemo(
     () => members.map((member) => ({ label: member.user.display_name, value: member.user.id })),
@@ -132,8 +173,7 @@ export function TaskDetailPanel({
 
   async function handleSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const session = getStoredSession();
-    if (!session?.access_token || !task) {
+    if (!task) {
       return;
     }
 
@@ -141,20 +181,20 @@ export function TaskDetailPanel({
       setSubmitting(true);
       setError(null);
       setMessage(null);
-      await apiRequest(`/workspaces/${workspaceId}/tasks/${task.id}`, {
-        method: "PATCH",
-        token: session.access_token,
-        json: {
-          title,
-          content_markdown: content,
-          assignee_user_id: assigneeUserId || null,
-          planned_due_at: plannedDueAt ? new Date(plannedDueAt).toISOString() : null,
-          weight: Number(weight || 0),
-          ...(canScore ? { score: score ? Number(score) : null } : {}),
-        },
+      await onPatchTask(task.id, {
+        ...(isSystemRoot
+          ? {
+              title,
+            }
+          : {
+              assignee_user_id: assigneeUserId || null,
+              planned_due_at: plannedDueAt ? new Date(plannedDueAt).toISOString() : null,
+              ...(canScore ? { score: score ? Number(score) : null } : {}),
+              title,
+              weight: Number(weight || 0),
+            }),
       });
-      setMessage("节点详情已保存。");
-      await onRefresh();
+      setMessage(isSystemRoot ? "根节点标题已保存，正文实时协同中。" : "节点属性已保存，正文实时协同中。");
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "保存节点失败。");
     } finally {
@@ -163,8 +203,7 @@ export function TaskDetailPanel({
   }
 
   async function handleStatusChange(status: TaskStatus) {
-    const session = getStoredSession();
-    if (!session?.access_token || !task) {
+    if (!task || isSystemRoot) {
       return;
     }
 
@@ -172,17 +211,14 @@ export function TaskDetailPanel({
       setSubmitting(true);
       setError(null);
       setMessage(null);
-      const response = await apiRequest<MessageResponse | TaskTreeNode>(
-        `/workspaces/${workspaceId}/tasks/${task.id}/status`,
-        {
-          method: "POST",
-          token: session.access_token,
-          json: { status, remark: remark.trim() || null },
-        },
-      );
-      setMessage("status" in response ? null : "状态已更新。");
+      await onSetTaskStatus(task.id, status, remark.trim() || null);
+      setMessage("状态已更新。");
       setRemark("");
-      await onRefresh();
+      setTransitionCache((current) => {
+        const next = { ...current };
+        delete next[task.id];
+        return next;
+      });
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "更新状态失败。");
     } finally {
@@ -191,8 +227,7 @@ export function TaskDetailPanel({
   }
 
   async function handleDelete() {
-    const session = getStoredSession();
-    if (!session?.access_token || !task) {
+    if (!task || isSystemRoot) {
       return;
     }
 
@@ -204,12 +239,8 @@ export function TaskDetailPanel({
       setSubmitting(true);
       setError(null);
       setMessage(null);
-      await apiRequest<MessageResponse>(`/workspaces/${workspaceId}/tasks/${task.id}`, {
-        method: "DELETE",
-        token: session.access_token,
-      });
+      await onDeleteTask(task.id);
       setMessage("任务已删除。");
-      await onRefresh();
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "删除任务失败。");
     } finally {
@@ -217,31 +248,45 @@ export function TaskDetailPanel({
     }
   }
 
+  const panelClassName =
+    variant === "floating"
+      ? "absolute bottom-3 left-3 right-3 z-20 overflow-auto rounded-[24px] border border-white/[0.1] bg-[rgba(7,10,18,0.92)] p-4 shadow-[0_28px_80px_rgba(0,0,0,0.42)] backdrop-blur xl:bottom-auto xl:left-auto xl:right-4 xl:top-4 xl:max-h-[calc(100%-2rem)] xl:w-[24rem]"
+      : "panel rounded-[20px] p-4 xl:sticky xl:top-3 xl:h-[calc(100vh-1.5rem)] xl:overflow-auto";
+
   if (!task) {
     return (
-      <aside className="panel rounded-[20px] p-4 xl:sticky xl:top-3 xl:h-[calc(100vh-1.5rem)] xl:overflow-auto">
+      <aside className={panelClassName}>
         <p className="text-[10px] uppercase tracking-[0.24em] text-white/34">Task Detail</p>
-        <h2 className="mt-2 text-lg font-semibold text-white">节点详情侧栏</h2>
+        <h2 className="mt-2 text-lg font-semibold text-white">节点详情</h2>
         <p className="mt-3 text-sm leading-7 text-text-muted">
-          点击思维导图中的任意节点后，这里会显示详细信息、状态流转记录，以及可编辑字段。
+          点击导图中的节点后，这里会显示详细信息。快捷键：`Tab` 新建下级，`Enter` 新建同级，`Delete`
+          删除当前普通节点。
         </p>
       </aside>
     );
   }
 
   return (
-    <aside className="panel rounded-[20px] p-4 xl:sticky xl:top-3 xl:h-[calc(100vh-1.5rem)] xl:overflow-auto">
+    <aside className={panelClassName}>
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-[10px] uppercase tracking-[0.24em] text-white/34">Task Detail</p>
           <h2 className="mt-2 text-lg font-semibold text-white">{task.title}</h2>
           <p className="mt-2 text-sm text-text-muted">
-            当前状态：{transitionLabel(taskStatus)} · 子任务 {task.children.length} 个
+            {isSystemRoot ? "系统根节点" : `当前状态：${transitionLabel(taskStatus)} · 子任务 ${task.children.length} 个`}
           </p>
         </div>
         {readOnly ? (
           <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-xs text-amber-100">
             历史只读
+          </span>
+        ) : isOptimisticTask ? (
+          <span className="rounded-full border border-sky-400/20 bg-sky-400/10 px-2.5 py-1 text-xs text-sky-100">
+            同步中
+          </span>
+        ) : isSystemRoot ? (
+          <span className="rounded-full border border-sky-400/20 bg-sky-400/10 px-2.5 py-1 text-xs text-sky-100">
+            根节点
           </span>
         ) : null}
       </div>
@@ -252,6 +297,7 @@ export function TaskDetailPanel({
             名称
           </label>
           <input
+            ref={titleInputRef}
             className="field-input"
             disabled={!canMutate}
             id="task-title"
@@ -262,144 +308,163 @@ export function TaskDetailPanel({
 
         <div>
           <label className="field-label" htmlFor="task-content">
-            内容（Markdown）
+            正文（协同 Markdown）
           </label>
-          <textarea
-            className="field-input min-h-32 resize-y"
-            disabled={!canMutate}
-            id="task-content"
-            onChange={(event) => setContent(event.target.value)}
-            value={content}
-          />
+          <TaskDocumentEditor accessToken={accessToken} readOnly={!canMutate} task={task} userName={userName} />
         </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className="field-label" htmlFor="task-assignee">
-              负责人
-            </label>
-            <select
-              className="field-input"
-              disabled={!canMutate}
-              id="task-assignee"
-              onChange={(event) => setAssigneeUserId(event.target.value)}
-              value={assigneeUserId}
-            >
-              <option value="">未分配</option>
-              {memberOptions.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="field-label" htmlFor="task-due-at">
-              计划截止时间
-            </label>
-            <input
-              className="field-input"
-              disabled={!canMutate}
-              id="task-due-at"
-              onChange={(event) => setPlannedDueAt(event.target.value)}
-              type="datetime-local"
-              value={plannedDueAt}
-            />
-          </div>
-        </div>
+        {!isSystemRoot ? (
+          <>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="field-label" htmlFor="task-assignee">
+                  负责人
+                </label>
+                <select
+                  className="field-input"
+                  disabled={!canMutate}
+                  id="task-assignee"
+                  onChange={(event) => setAssigneeUserId(event.target.value)}
+                  value={assigneeUserId}
+                >
+                  <option value="">未分配</option>
+                  {memberOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label className="field-label" htmlFor="task-due-at">
+                  计划截止时间
+                </label>
+                <input
+                  className="field-input"
+                  disabled={!canMutate}
+                  id="task-due-at"
+                  onChange={(event) => setPlannedDueAt(event.target.value)}
+                  type="datetime-local"
+                  value={plannedDueAt}
+                />
+              </div>
+            </div>
 
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className="field-label" htmlFor="task-weight">
-              权重
-            </label>
-            <input
-              className="field-input"
-              disabled={!canMutate}
-              id="task-weight"
-              min="0"
-              onChange={(event) => setWeight(event.target.value)}
-              type="number"
-              value={weight}
-            />
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <label className="field-label" htmlFor="task-weight">
+                  权重
+                </label>
+                <input
+                  className="field-input"
+                  disabled={!canMutate}
+                  id="task-weight"
+                  min="0"
+                  onChange={(event) => setWeight(event.target.value)}
+                  type="number"
+                  value={weight}
+                />
+              </div>
+              <div>
+                <label className="field-label" htmlFor="task-score">
+                  评分
+                </label>
+                <input
+                  className="field-input"
+                  disabled={!canMutate || !canScore}
+                  id="task-score"
+                  min="0"
+                  onChange={(event) => setScore(event.target.value)}
+                  type="number"
+                  value={score}
+                />
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="rounded-[18px] border border-white/[0.08] bg-white/[0.03] p-3 text-sm text-text-muted">
+            根节点只作为整个工作空间的导图锚点，不参与状态流转、指派、排期、评分和删除。
           </div>
-          <div>
-            <label className="field-label" htmlFor="task-score">
-              评分
-            </label>
-            <input
-              className="field-input"
-              disabled={!canMutate || !canScore}
-              id="task-score"
-              min="0"
-              onChange={(event) => setScore(event.target.value)}
-              type="number"
-              value={score}
-            />
+        )}
+
+        {isOptimisticTask ? (
+          <div className="rounded-[18px] border border-sky-400/18 bg-sky-400/6 p-3 text-sm text-sky-100/88">
+            节点正在同步到服务端，稍后即可继续编辑。
           </div>
-        </div>
+        ) : null}
 
         <button className="primary-button w-full justify-center" disabled={!canMutate || submitting} type="submit">
-          {submitting ? "保存中..." : "保存节点详情"}
+          {submitting ? "保存中..." : isSystemRoot ? "保存根节点标题" : "保存节点属性"}
         </button>
       </form>
 
-      <div className="mt-4 rounded-[16px] border border-white/[0.08] bg-white/[0.03] p-3">
-        <p className="text-[10px] uppercase tracking-[0.22em] text-white/34">Status Actions</p>
-        <div className="mt-3 flex flex-wrap gap-2">
-          {(["in_progress", "pending_review", "completed", "terminated"] as TaskStatus[]).map((status) => (
-            <button
-              key={status}
-              className={taskStatus === status ? "primary-button" : "secondary-button"}
-              disabled={!canMutate || submitting}
-              onClick={() => void handleStatusChange(status)}
-              type="button"
-            >
-              {transitionLabel(status)}
-            </button>
-          ))}
+      {!isSystemRoot ? (
+        <div className="mt-4 rounded-[16px] border border-white/[0.08] bg-white/[0.03] p-3">
+          <p className="text-[10px] uppercase tracking-[0.22em] text-white/34">Status Actions</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {(["in_progress", "pending_review", "completed", "terminated"] as TaskStatus[]).map((status) => (
+              <button
+                key={status}
+                className={taskStatus === status ? "primary-button" : "secondary-button"}
+                disabled={!canMutate || submitting}
+                onClick={() => void handleStatusChange(status)}
+                type="button"
+              >
+                {transitionLabel(status)}
+              </button>
+            ))}
+          </div>
+          <textarea
+            className="field-input mt-3 min-h-24 resize-y"
+            disabled={!canMutate || submitting}
+            onChange={(event) => setRemark(event.target.value)}
+            placeholder="退回备注为选填，其他状态也可以补充说明"
+            value={remark}
+          />
         </div>
-        <textarea
-          className="field-input mt-3 min-h-24 resize-y"
-          disabled={!canMutate || submitting}
-          onChange={(event) => setRemark(event.target.value)}
-          placeholder="退回备注为选填，其他状态也可以补充说明"
-          value={remark}
-        />
-      </div>
+      ) : (
+        <div className="mt-4 rounded-[16px] border border-white/[0.08] bg-white/[0.03] p-3 text-sm text-text-muted">
+          <p>快捷键提示</p>
+          <p className="mt-2 leading-6">Tab 新建下级节点，Enter 为当前节点新增同级节点，Delete 删除当前普通节点。</p>
+        </div>
+      )}
 
-      <div className="mt-4 rounded-[16px] border border-white/[0.08] bg-white/[0.03] p-3">
-        <div className="flex items-center justify-between gap-4">
-          <p className="text-[10px] uppercase tracking-[0.22em] text-white/34">Transitions</p>
-          {loadingTransitions ? <span className="text-xs text-white/42">加载中...</span> : null}
+      {!isSystemRoot ? (
+        <div className="mt-4 rounded-[16px] border border-white/[0.08] bg-white/[0.03] p-3">
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-[10px] uppercase tracking-[0.22em] text-white/34">Transitions</p>
+            {loadingTransitions ? <span className="text-xs text-white/42">加载中...</span> : null}
+          </div>
+          <div className="mt-3 space-y-2">
+            {transitions.length ? (
+              transitions.slice(0, 6).map((transition) => (
+                <div key={transition.id} className="rounded-[14px] border border-white/[0.08] bg-black/10 px-3 py-2.5">
+                  <p className="text-sm text-white/82">
+                    {transitionLabel(transition.from_status)} {"->"} {transitionLabel(transition.to_status)}
+                  </p>
+                  <p className="mt-1 text-xs text-white/42">
+                    {new Date(transition.created_at).toLocaleString("zh-CN")} · {transition.action_type}
+                  </p>
+                  {transition.remark ? <p className="mt-2 text-sm leading-6 text-text-muted">{transition.remark}</p> : null}
+                </div>
+              ))
+            ) : (
+              <p className="text-sm text-text-muted">当前还没有状态流转记录。</p>
+            )}
+          </div>
         </div>
-        <div className="mt-3 space-y-2">
-          {transitions.length ? (
-            transitions.slice(0, 6).map((transition) => (
-              <div key={transition.id} className="rounded-[14px] border border-white/[0.08] bg-black/10 px-3 py-2.5">
-                <p className="text-sm text-white/82">
-                  {transitionLabel(transition.from_status)} {"->"} {transitionLabel(transition.to_status)}
-                </p>
-                <p className="mt-1 text-xs text-white/42">
-                  {new Date(transition.created_at).toLocaleString("zh-CN")} · {transition.action_type}
-                </p>
-                {transition.remark ? <p className="mt-2 text-sm leading-6 text-text-muted">{transition.remark}</p> : null}
-              </div>
-            ))
-          ) : (
-            <p className="text-sm text-text-muted">当前还没有状态流转记录。</p>
-          )}
-        </div>
-      </div>
+      ) : null}
 
-      <button
-        className="secondary-button mt-4 w-full justify-center border-rose-400/18 text-rose-200 hover:border-rose-400/30 hover:text-rose-100"
-        disabled={!canMutate || submitting}
-        onClick={() => void handleDelete()}
-        type="button"
-      >
-        删除当前任务
-      </button>
+      {canDelete ? (
+        <button
+          className="secondary-button mt-4 w-full justify-center border-rose-400/18 text-rose-200 hover:border-rose-400/30 hover:text-rose-100"
+          disabled={submitting}
+          onClick={() => void handleDelete()}
+          type="button"
+        >
+          删除当前任务
+        </button>
+      ) : null}
 
       {message ? <p className="mt-4 text-sm text-emerald-200">{message}</p> : null}
       {error ? <p className="mt-2 text-sm text-rose-300">{error}</p> : null}

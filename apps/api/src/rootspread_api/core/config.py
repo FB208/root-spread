@@ -17,8 +17,11 @@ class Settings(BaseSettings):
     frontend_url: str = "http://localhost:3000"
     cors_origins_raw: str = Field(default="", validation_alias="CORS_ORIGINS")
     database_url: str = "mysql+pymysql://rootspread:rootspread@127.0.0.1:3306/rootspread"
+    database_pool_pre_ping: bool = True
+    database_pool_recycle_seconds: int = 1800
     redis_url: str = "redis://127.0.0.1:6379/0"
     jwt_secret: str = "change-me"
+    collab_secret: str = "change-me-collab"
     access_token_ttl_minutes: int = 60
     refresh_token_ttl_days: int = 30
     email_verification_ttl_hours: int = 24

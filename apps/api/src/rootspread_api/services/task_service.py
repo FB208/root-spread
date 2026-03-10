@@ -1,11 +1,10 @@
-from collections import defaultdict
 from collections.abc import Sequence
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from rootspread_api.core.time import utc_now
-from rootspread_api.models.task import TaskNode, TaskStatus, TaskStatusTransition
+from rootspread_api.models.task import TaskNode, TaskNodeKind, TaskStatus, TaskStatusTransition
 from rootspread_api.schemas.task import TaskNodeRead, TaskTreeNodeRead
 
 
@@ -39,6 +38,56 @@ def append_transition(
             operator_user_id=operator_user_id,
         )
     )
+
+
+def is_system_root_task(task: TaskNode) -> bool:
+    return task.node_kind == TaskNodeKind.SYSTEM_ROOT.value
+
+
+def get_system_root(session: Session, workspace_id: str) -> TaskNode | None:
+    return session.scalar(
+        select(TaskNode).where(
+            TaskNode.workspace_id == workspace_id,
+            TaskNode.node_kind == TaskNodeKind.SYSTEM_ROOT.value,
+            TaskNode.parent_id.is_(None),
+            TaskNode.archived_at.is_(None),
+        )
+    )
+
+
+def create_system_root(
+    session: Session, workspace_id: str, user_id: str, title: str = "根节点"
+) -> TaskNode:
+    task = TaskNode(
+        workspace_id=workspace_id,
+        parent_id=None,
+        root_id="",
+        path="",
+        depth=0,
+        sort_order=0,
+        title=title,
+        content_markdown="",
+        node_kind=TaskNodeKind.SYSTEM_ROOT.value,
+        status=TaskStatus.IN_PROGRESS.value,
+        created_by_user_id=user_id,
+        assignee_user_id=None,
+        planned_due_at=None,
+        weight=0,
+    )
+    session.add(task)
+    session.flush()
+    update_task_path(task, None)
+    return task
+
+
+def ensure_system_root(
+    session: Session, workspace_id: str, user_id: str, title: str = "根节点"
+) -> TaskNode:
+    root = get_system_root(session, workspace_id)
+    if root is not None:
+        return root
+
+    return create_system_root(session, workspace_id, user_id, title)
 
 
 def change_task_status(
@@ -77,6 +126,9 @@ def recompute_ancestor_statuses(session: Session, task: TaskNode, operator_user_
 def recompute_task_status_from_children(
     session: Session, task: TaskNode, operator_user_id: str
 ) -> None:
+    if is_system_root_task(task):
+        return
+
     child_statuses = session.scalars(
         select(TaskNode.status)
         .where(TaskNode.parent_id == task.id)
@@ -111,39 +163,63 @@ def task_has_children(session: Session, task_id: str) -> bool:
 
 def build_task_tree(
     tasks: Sequence[TaskNode], statuses: set[str] | None = None
-) -> list[TaskTreeNodeRead]:
+) -> TaskTreeNodeRead | None:
     ordered_tasks = sorted(tasks, key=lambda item: (item.depth, item.sort_order, item.created_at))
     by_id = {task.id: task for task in ordered_tasks}
+    system_root = next(
+        (
+            task
+            for task in ordered_tasks
+            if task.node_kind == TaskNodeKind.SYSTEM_ROOT.value and task.parent_id is None
+        ),
+        None,
+    )
 
+    if system_root is None:
+        return None
+
+    visible_ids = {system_root.id}
     if statuses:
-        visible_ids = {task.id for task in ordered_tasks if task.status in statuses}
-        for task_id in list(visible_ids):
-            parent_id = by_id[task_id].parent_id
-            while parent_id:
-                visible_ids.add(parent_id)
-                parent_id = by_id[parent_id].parent_id if parent_id in by_id else None
+        matched_ids = {
+            task.id
+            for task in ordered_tasks
+            if task.node_kind != TaskNodeKind.SYSTEM_ROOT.value and task.status in statuses
+        }
+        for task_id in matched_ids:
+            current = by_id.get(task_id)
+            while current is not None:
+                visible_ids.add(current.id)
+                current = by_id.get(current.parent_id) if current.parent_id else None
     else:
         visible_ids = set(by_id)
 
-    children_map: dict[str | None, list[TaskTreeNodeRead]] = defaultdict(list)
+    nodes_by_id: dict[str, TaskTreeNodeRead] = {}
 
     for task in ordered_tasks:
         if task.id not in visible_ids:
             continue
 
+        is_root = task.id == system_root.id
         node_data = TaskNodeRead.model_validate(task).model_dump()
-        node = TaskTreeNodeRead(
-            **node_data,
-            matched_filter=(not statuses or task.status in statuses),
+        matched_filter = (
+            False if (is_root and statuses) else (not statuses or task.status in statuses)
         )
-        children_map[task.parent_id].append(node)
-        children_map[task.id]
+        node = TaskTreeNodeRead(**node_data, matched_filter=matched_filter, children=[])
+        nodes_by_id[task.id] = node
 
-    for nodes in children_map.values():
-        for node in nodes:
-            node.children = children_map[node.id]
+    for task in ordered_tasks:
+        node = nodes_by_id.get(task.id)
+        if node is None:
+            continue
 
-    return children_map[None]
+        if task.parent_id is None:
+            continue
+
+        parent = nodes_by_id.get(task.parent_id)
+        if parent is not None:
+            parent.children.append(node)
+
+    return nodes_by_id.get(system_root.id)
 
 
 def normalize_status_filters(statuses: list[TaskStatus] | None) -> set[str] | None:
@@ -166,4 +242,8 @@ def update_task_path(task: TaskNode, parent: TaskNode | None) -> None:
 
 
 def flatten_tasks_for_response(tasks: Sequence[TaskNode]) -> list[TaskNodeRead]:
-    return [TaskNodeRead.model_validate(task) for task in tasks]
+    return [
+        TaskNodeRead.model_validate(task)
+        for task in tasks
+        if task.node_kind != TaskNodeKind.SYSTEM_ROOT.value
+    ]

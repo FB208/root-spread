@@ -1,10 +1,11 @@
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from rootspread_api.core.database import Base
+from rootspread_api.core.time import utc_now
 from rootspread_api.models.mixins import IdMixin, TimestampMixin
 
 
@@ -13,6 +14,11 @@ class TaskStatus(StrEnum):
     PENDING_REVIEW = "pending_review"
     COMPLETED = "completed"
     TERMINATED = "terminated"
+
+
+class TaskNodeKind(StrEnum):
+    SYSTEM_ROOT = "system_root"
+    TASK = "task"
 
 
 class TaskNode(IdMixin, TimestampMixin, Base):
@@ -31,9 +37,11 @@ class TaskNode(IdMixin, TimestampMixin, Base):
     path: Mapped[str] = mapped_column(String(2000))
     depth: Mapped[int] = mapped_column(Integer, default=0)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    meta_revision: Mapped[int] = mapped_column(Integer, default=0)
 
     title: Mapped[str] = mapped_column(String(200))
     content_markdown: Mapped[str] = mapped_column(Text, default="")
+    node_kind: Mapped[str] = mapped_column(String(32), default=TaskNodeKind.TASK.value, index=True)
     status: Mapped[str] = mapped_column(
         String(32), default=TaskStatus.IN_PROGRESS.value, index=True
     )
@@ -81,3 +89,22 @@ class TaskStatusTransition(IdMixin, TimestampMixin, Base):
 
     task = relationship("TaskNode", back_populates="transitions")
     operator = relationship("User")
+
+
+class TaskChangeEvent(Base):
+    __tablename__ = "task_change_events"
+
+    seq: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    workspace_id: Mapped[str] = mapped_column(
+        ForeignKey("workspaces.id", ondelete="CASCADE"),
+        index=True,
+    )
+    actor_user_id: Mapped[str | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True, index=True
+    )
+    op_type: Mapped[str] = mapped_column(String(64), index=True)
+    op_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    payload_json: Mapped[dict] = mapped_column(JSON)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+
+    actor = relationship("User")

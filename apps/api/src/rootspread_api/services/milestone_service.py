@@ -3,11 +3,14 @@ from copy import deepcopy
 from sqlalchemy.orm import Session
 
 from rootspread_api.core.time import utc_now
-from rootspread_api.models.task import TaskNode, TaskStatus
+from rootspread_api.models.task import TaskNode, TaskNodeKind, TaskStatus
 from rootspread_api.schemas.task import TaskNodeRead, TaskTreeNodeRead
 
 
 def is_task_ready_for_archive(task: TaskNode, target_at) -> bool:
+    if task.node_kind == TaskNodeKind.SYSTEM_ROOT.value:
+        return False
+
     if task.archived_at is not None:
         return False
 
@@ -22,9 +25,18 @@ def is_task_ready_for_archive(task: TaskNode, target_at) -> bool:
 
 def build_milestone_snapshot_tree(
     tasks: list[TaskNode], archived_ids: set[str]
-) -> list[TaskTreeNodeRead]:
+) -> TaskTreeNodeRead | None:
     by_id = {task.id: task for task in tasks}
-    included_ids = set(archived_ids)
+    system_root = next(
+        (task for task in tasks if task.node_kind == TaskNodeKind.SYSTEM_ROOT.value),
+        None,
+    )
+
+    if system_root is None:
+        return None
+
+    included_ids = {system_root.id}
+    included_ids.update(archived_ids)
 
     for task_id in list(archived_ids):
         parent_id = by_id[task_id].parent_id
@@ -39,24 +51,23 @@ def build_milestone_snapshot_tree(
 
         node = TaskTreeNodeRead(
             **TaskNodeRead.model_validate(task).model_dump(),
-            matched_filter=task.id in archived_ids,
+            matched_filter=(
+                task.id in archived_ids and task.node_kind != TaskNodeKind.SYSTEM_ROOT.value
+            ),
             children=[],
         )
         nodes_by_id[task.id] = node
 
-    roots: list[TaskTreeNodeRead] = []
     for task in sorted(tasks, key=lambda item: (item.depth, item.sort_order, item.created_at)):
         node = nodes_by_id.get(task.id)
         if node is None:
             continue
 
         parent = nodes_by_id.get(task.parent_id) if task.parent_id else None
-        if parent is None:
-            roots.append(node)
-        else:
+        if parent is not None:
             parent.children.append(node)
 
-    return roots
+    return nodes_by_id.get(system_root.id)
 
 
 def archive_tasks_for_milestone(session: Session, tasks: list[TaskNode], milestone_id: str) -> int:
@@ -70,17 +81,25 @@ def archive_tasks_for_milestone(session: Session, tasks: list[TaskNode], milesto
     return archived_count
 
 
-def filter_snapshot_tree(nodes: list[dict], statuses: set[str] | None) -> list[dict]:
-    if not statuses:
-        return deepcopy(nodes)
+def filter_snapshot_tree(node: dict | None, statuses: set[str] | None) -> dict | None:
+    if node is None:
+        return None
 
-    filtered: list[dict] = []
-    for node in nodes:
-        children = filter_snapshot_tree(node.get("children", []), statuses)
-        matched = node.get("status") in statuses
-        if matched or children:
-            new_node = deepcopy(node)
-            new_node["matched_filter"] = matched
-            new_node["children"] = children
-            filtered.append(new_node)
-    return filtered
+    if not statuses:
+        return deepcopy(node)
+
+    is_root = node.get("node_kind") == TaskNodeKind.SYSTEM_ROOT.value
+    filtered_children = [
+        child
+        for child in (filter_snapshot_tree(child, statuses) for child in node.get("children", []))
+        if child is not None
+    ]
+    matched = (not is_root) and node.get("status") in statuses
+
+    if is_root or matched or filtered_children:
+        new_node = deepcopy(node)
+        new_node["matched_filter"] = matched
+        new_node["children"] = filtered_children
+        return new_node
+
+    return None

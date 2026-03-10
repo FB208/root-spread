@@ -11,9 +11,11 @@
     "build:web": "pnpm --dir apps/web build",
     "lint:web": "pnpm --dir apps/web lint",
     "dev:api": "uv run --project apps/api rootspread-api",
+    "dev:collab": "pnpm --dir apps/collab dev",
     "lint:api": "uv run --project apps/api ruff check",
     "format:api": "uv run --project apps/api ruff format",
     "dev": "powershell -ExecutionPolicy Bypass -File scripts/windows/dev.ps1",
+    "reset:db:keep-users": "powershell -ExecutionPolicy Bypass -File scripts/windows/reset-db-keep-users.ps1",
     "test:api": "uv run --project apps/api pytest",
     "test:web": "pnpm --dir apps/web test"
   },

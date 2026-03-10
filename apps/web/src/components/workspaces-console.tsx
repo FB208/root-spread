@@ -6,12 +6,13 @@ import { type FormEvent, useEffect, useMemo, useState } from "react";
 import {
   type AuthSession,
   type AuthUser,
+  ApiError,
   type PendingInvitation,
   type WorkspaceCreateResponse,
   type WorkspaceItem,
   apiRequest,
 } from "@/lib/api";
-import { clearSession, getStoredSession } from "@/lib/auth-storage";
+import { clearSession, getCachedSession } from "@/lib/auth-storage";
 
 type WorkspaceState = {
   session: AuthSession | null;
@@ -38,7 +39,7 @@ export function WorkspacesConsole() {
   const accessToken = state.session?.access_token ?? null;
 
   async function loadConsole() {
-    const session = getStoredSession();
+    const session = await getCachedSession();
     if (!session) {
       setState(initialState);
       setLoading(false);
@@ -62,7 +63,9 @@ export function WorkspacesConsole() {
       const message = loadError instanceof Error ? loadError.message : "加载工作空间失败。";
       setError(message);
       setState(initialState);
-      clearSession();
+      if (loadError instanceof ApiError && loadError.status === 401) {
+        clearSession();
+      }
     } finally {
       setLoading(false);
     }

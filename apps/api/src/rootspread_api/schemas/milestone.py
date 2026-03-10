@@ -36,7 +36,7 @@ class MilestoneSnapshotRead(ORMModel):
     id: str
     milestone_id: str
     snapshot_name: str
-    snapshot_data: list[dict]
+    snapshot_data: dict | None
     archived_task_count: int
     created_by_user_id: str
     created_at: datetime
@@ -45,4 +45,4 @@ class MilestoneSnapshotRead(ORMModel):
 
 class MilestoneTreeResponse(BaseModel):
     milestone: MilestoneRead
-    tree: list[TaskTreeNodeRead]
+    root: TaskTreeNodeRead | None

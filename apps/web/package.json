@@ -10,13 +10,19 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@codemirror/lang-markdown": "^6.3.4",
+    "@codemirror/state": "^6.5.2",
+    "@codemirror/view": "^6.38.6",
+    "@hocuspocus/provider": "^3.4.0",
     "@xyflow/react": "^12.10.1",
     "clsx": "^2.1.1",
     "lucide-react": "^0.577.0",
     "next": "16.1.6",
     "react": "19.2.3",
     "react-dom": "19.2.3",
-    "tailwind-merge": "^3.5.0"
+    "tailwind-merge": "^3.5.0",
+    "y-codemirror.next": "^0.3.5",
+    "yjs": "^13.6.27"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

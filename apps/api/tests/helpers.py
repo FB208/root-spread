@@ -61,3 +61,12 @@ def create_workspace(client: TestClient, access_token: str, name: str = "Workspa
     )
     assert response.status_code == 201
     return response.json()
+
+
+def get_system_root(client: TestClient, access_token: str, workspace_id: str) -> dict:
+    response = client.get(
+        f"/api/v1/workspaces/{workspace_id}/tasks/tree",
+        headers=auth_headers(access_token),
+    )
+    assert response.status_code == 200
+    return response.json()["root"]
