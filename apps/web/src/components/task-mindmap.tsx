@@ -95,13 +95,14 @@ const NODE_WIDTH = 172;
 const ROOT_NODE_WIDTH = 212;
 const NODE_HEIGHT = 64;
 const HORIZONTAL_GAP = 226;
+const ROOT_GAP = ROOT_NODE_WIDTH - NODE_WIDTH;
 const VERTICAL_GAP = 20;
 const LAYOUT_OPTIONS = {
   horizontalGap: HORIZONTAL_GAP,
   nodeHeight: NODE_HEIGHT,
   originX: 0,
   originY: 104,
-  rootGap: 0,
+  rootGap: ROOT_GAP,
   verticalGap: VERTICAL_GAP,
 } as const;
 
@@ -175,6 +176,33 @@ function toneByStatus(task: TaskTreeNode) {
   }
 }
 
+function syncBadge(task: TaskTreeNode) {
+  switch (task.sync_state) {
+    case "sending":
+      return {
+        className: "border-sky-400/20 bg-sky-400/10 text-sky-100",
+        label: "同步中",
+      };
+    case "queued":
+      return {
+        className: "border-sky-400/20 bg-sky-400/10 text-sky-100",
+        label: task.server_id ? "待同步" : "待创建",
+      };
+    case "failed":
+      return {
+        className: "border-rose-400/20 bg-rose-400/10 text-rose-100",
+        label: "失败",
+      };
+    case "conflict":
+      return {
+        className: "border-rose-400/20 bg-rose-400/10 text-rose-100",
+        label: "冲突",
+      };
+    default:
+      return null;
+  }
+}
+
 function MindmapEdge({ id, sourceX, sourceY, targetX, targetY, style }: EdgeProps<Edge>) {
   const [path] = getBezierPath({
     sourceX,
@@ -223,6 +251,7 @@ const TaskCanvasNode = memo(
     const inputRef = useRef<HTMLInputElement | null>(null);
     const skipBlurCommitRef = useRef(false);
     const tone = toneByStatus(task);
+    const taskSyncBadge = syncBadge(task);
     const isSystemRoot = task.node_kind === "system_root";
     const collapseAnchor = direction === "left" ? "-left-3" : "-right-3";
 
@@ -287,6 +316,12 @@ const TaskCanvasNode = memo(
             aria-hidden="true"
             className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rounded-full border border-white/70 bg-white"
           />
+        ) : null}
+
+        {taskSyncBadge ? (
+          <span className={`absolute -bottom-2 left-1/2 -translate-x-1/2 rounded-full border px-2 py-0.5 text-[10px] leading-none ${taskSyncBadge.className}`}>
+            {taskSyncBadge.label}
+          </span>
         ) : null}
 
         {hasChildren ? (
@@ -447,7 +482,8 @@ export function TaskMindmap({
   selectedTaskId,
 }: TaskMindmapProps) {
   const canvasRef = useRef<HTMLDivElement | null>(null);
-  const reactFlowRef = useRef<ReactFlowInstance | null>(null);
+  const reactFlowRef = useRef<ReactFlowInstance<TaskCanvasFlowNode, Edge> | null>(null);
+  const handledFocusTokenRef = useRef(0);
   const handlersRef = useRef({
     onRenameCancel,
     onRenameChange,
@@ -655,7 +691,13 @@ export function TaskMindmap({
   );
 
   useEffect(() => {
-    if (!focusCanvasToken) {
+    if (!focusCanvasToken || handledFocusTokenRef.current === focusCanvasToken) {
+      return;
+    }
+
+    handledFocusTokenRef.current = focusCanvasToken;
+
+    if (editingTaskId) {
       return;
     }
 
@@ -664,7 +706,7 @@ export function TaskMindmap({
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, [focusCanvas, focusCanvasToken]);
+  }, [editingTaskId, focusCanvas, focusCanvasToken]);
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {

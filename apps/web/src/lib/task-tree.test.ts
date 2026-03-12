@@ -100,9 +100,9 @@ describe("task-tree helpers", () => {
 
     expect(layout.nodes.map((node) => `${node.id}:${node.direction}@${node.x},${node.y}`)).toEqual([
       "root-1:center@0,6",
-      "child-1:right@10,0",
-      "grandchild-1:right@20,0",
-      "child-2:right@10,12",
+      "child-1:right@14,0",
+      "grandchild-1:right@24,0",
+      "child-2:right@14,12",
     ]);
     expect(layout.edges.map((edge) => `${edge.id}:${edge.direction}`)).toEqual([
       "root-1->child-1:right",

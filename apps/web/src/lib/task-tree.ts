@@ -329,7 +329,7 @@ export function buildMindmapLayout(
     const isCollapsed = collapsedTaskIds.has(node.id);
     const blockHeight = measureSubtree(node);
     const nodeY = startY + blockHeight / 2 - options.nodeHeight / 2;
-    const offsetX = depth * options.horizontalGap;
+    const offsetX = depth * options.horizontalGap + (depth > 0 ? options.rootGap : 0);
 
     nodes.push({
       collapsed: isCollapsed,

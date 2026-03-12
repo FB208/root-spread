@@ -51,6 +51,34 @@ function statusTone(status: TaskStatus) {
   }
 }
 
+function syncLabel(task: TaskTreeNode) {
+  switch (task.sync_state) {
+    case "sending":
+      return "同步中";
+    case "queued":
+      return task.server_id ? "待同步" : "待创建";
+    case "failed":
+      return "同步失败";
+    case "conflict":
+      return "存在冲突";
+    default:
+      return null;
+  }
+}
+
+function syncTone(task: TaskTreeNode) {
+  switch (task.sync_state) {
+    case "failed":
+    case "conflict":
+      return "border-rose-400/20 bg-rose-400/10 text-rose-100";
+    case "queued":
+    case "sending":
+      return "border-sky-400/20 bg-sky-400/10 text-sky-100";
+    default:
+      return "border-white/[0.08] bg-white/[0.03] text-white/70";
+  }
+}
+
 function buildStatusQuery(selectedStatuses: TaskStatus[]) {
   if (!selectedStatuses.length) {
     return "";
@@ -114,11 +142,14 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
     bulkSetStatus: bulkSetLiveStatus,
     connected: liveConnected,
     createTask: createLiveTask,
+    discardTaskChanges: discardLiveTaskChanges,
     deleteTask: deleteLiveTask,
     error: liveError,
+    isSyncLeader,
     loading: liveLoading,
     patchTask: patchLiveTask,
     reorderTasks: reorderLiveTasks,
+    retryTaskSync: retryLiveTaskSync,
     rootTask: liveRootTask,
     setTaskStatus: setLiveTaskStatus,
   } = useTaskSync({
@@ -298,7 +329,7 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
       setSelectedTaskId(taskId);
       focusCanvas();
 
-      if (isHistoryView || task.id.startsWith("optimistic:") || normalizedTitle === task.title) {
+      if (isHistoryView || normalizedTitle === task.title) {
         return;
       }
 
@@ -727,7 +758,7 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
             </span>
             {!isHistoryView ? (
               <span className="rounded-full border border-white/[0.08] px-2 py-0.5">
-                {liveConnected ? "协同在线" : "协同重连中"}
+                {isSyncLeader ? (liveConnected ? "主同步在线" : "主同步重连中") : "跟随其他标签"}
               </span>
             ) : null}
             <span className="rounded-full border border-white/[0.08] px-2 py-0.5">
@@ -776,8 +807,10 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
                     accessToken={accessToken}
                     autoFocusToken={detailFocusToken}
                     members={members}
+                    onDiscardTaskChanges={discardLiveTaskChanges}
                     onDeleteTask={deleteLiveTask}
                     onPatchTask={patchLiveTask}
+                    onRetryTaskSync={retryLiveTaskSync}
                     onSetTaskStatus={setLiveTaskStatus}
                     readOnly={isHistoryView}
                     task={selectedTask}
@@ -939,8 +972,13 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
                                 )}
                                 <div className="min-w-0">
                                   <div className="truncate text-[13px] font-medium text-white/88">{task.title}</div>
-                                  <div className="mt-0.5 truncate text-[10px] text-text-muted">
-                                    {isSystemRoot ? "系统根节点" : task.id}
+                                  <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] text-text-muted">
+                                    <span className="truncate">{isSystemRoot ? "系统根节点" : task.server_id ?? "本地待同步"}</span>
+                                    {syncLabel(task) ? (
+                                      <span className={`rounded-full border px-1.5 py-0.5 ${syncTone(task)}`}>
+                                        {syncLabel(task)}
+                                      </span>
+                                    ) : null}
                                   </div>
                                 </div>
                               </div>
@@ -983,8 +1021,10 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
                   accessToken={accessToken}
                   autoFocusToken={detailFocusToken}
                   members={members}
+                  onDiscardTaskChanges={discardLiveTaskChanges}
                   onDeleteTask={deleteLiveTask}
                   onPatchTask={patchLiveTask}
+                  onRetryTaskSync={retryLiveTaskSync}
                   onSetTaskStatus={setLiveTaskStatus}
                   readOnly={isHistoryView}
                   task={selectedTask}

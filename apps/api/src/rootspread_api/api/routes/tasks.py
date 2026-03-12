@@ -17,6 +17,7 @@ from rootspread_api.schemas.task import (
     TaskBulkStatusUpdateRequest,
     TaskCreateRequest,
     TaskDocumentRead,
+    TaskIdMapping,
     TaskOperationRequest,
     TaskNodeRead,
     TaskReorderRequest,
@@ -46,6 +47,7 @@ from rootspread_api.services.task_sync import (
     collect_self_and_ancestors,
     collect_self_and_ancestor_ids,
     collect_subtree_ids,
+    find_task_changeset_by_op_id,
     get_latest_task_sync_seq,
     list_task_changes_since,
     persist_task_changeset,
@@ -126,6 +128,17 @@ def ensure_mutable_task(task: TaskNode) -> None:
         )
 
 
+def ensure_task_meta_revision(task: TaskNode, expected_revision: int | None) -> None:
+    if expected_revision is None:
+        return
+
+    if int(task.meta_revision or 0) != expected_revision:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(f"任务《{task.title}》已被其他协作者更新，请同步最新结果后再重试。"),
+        )
+
+
 def commit_and_broadcast_changes(
     session: Session,
     workspace_id: str,
@@ -134,6 +147,7 @@ def commit_and_broadcast_changes(
     upsert_ids: list[str],
     delete_ids: list[str],
     *,
+    id_mappings: list[TaskIdMapping] | None = None,
     op_id: str | None = None,
 ) -> TaskChangeset:
     changeset = persist_task_changeset(
@@ -143,6 +157,7 @@ def commit_and_broadcast_changes(
         op_type,
         upsert_ids,
         delete_ids,
+        id_mappings=id_mappings,
         op_id=op_id,
     )
     session.commit()
@@ -210,6 +225,9 @@ def execute_task_operation(
             payload.type,
             collect_self_and_ancestor_ids(task),
             [],
+            id_mappings=[TaskIdMapping(client_id=payload.client_id, task_id=task.id)]
+            if payload.client_id
+            else None,
             op_id=payload.op_id,
         )
 
@@ -219,10 +237,22 @@ def execute_task_operation(
 
         task = get_task_or_404(session, workspace_id, payload.task_id)
         require_task_write_access(membership, task, current_user.id)
+        ensure_task_meta_revision(task, payload.base_meta_revision)
 
         update_data = payload.model_dump(
             exclude_unset=True,
-            exclude={"op_id", "type", "task_id", "parent_id", "task_ids", "status", "remark"},
+            exclude={
+                "base_meta_revision",
+                "base_sync_seq",
+                "client_id",
+                "op_id",
+                "type",
+                "task_id",
+                "parent_id",
+                "task_ids",
+                "status",
+                "remark",
+            },
         )
         if is_system_root_task(task):
             disallowed_fields = set(update_data) - {"title", "content_markdown"}
@@ -271,6 +301,7 @@ def execute_task_operation(
         task = get_task_or_404(session, workspace_id, payload.task_id)
         require_task_write_access(membership, task, current_user.id)
         ensure_mutable_task(task)
+        ensure_task_meta_revision(task, payload.base_meta_revision)
 
         if payload.status == TaskStatus.COMPLETED and task_has_children(session, task.id):
             raise HTTPException(
@@ -335,6 +366,7 @@ def execute_task_operation(
         task = get_task_or_404(session, workspace_id, payload.task_id)
         require_task_write_access(membership, task, current_user.id)
         ensure_mutable_task(task)
+        ensure_task_meta_revision(task, payload.base_meta_revision)
 
         delete_ids = collect_subtree_ids(session, workspace_id, task)
         parent = task.parent
@@ -369,6 +401,9 @@ def execute_task_operation(
     if payload.type == "reorder_tasks":
         if payload.parent_id is None or not payload.task_ids:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="缺少排序参数。")
+
+        parent_task = get_task_or_404(session, workspace_id, payload.parent_id)
+        ensure_task_meta_revision(parent_task, payload.base_meta_revision)
 
         tasks = session.scalars(
             select(TaskNode).where(
@@ -720,6 +755,11 @@ def operate_task(
     session: Session = Depends(get_db),
 ) -> TaskChangeset:
     membership = require_workspace_membership(session, workspace_id, current_user.id)
+    handled_changeset = find_task_changeset_by_op_id(
+        session, workspace_id, current_user.id, payload.op_id
+    )
+    if handled_changeset is not None:
+        return handled_changeset
     return execute_task_operation(session, workspace_id, membership, current_user, payload)
 
 
@@ -751,11 +791,13 @@ async def task_stream(
         await task_stream_hub.connect(workspace_id, websocket)
 
         pending_changes = list_task_changes_since(session, workspace_id, since)
-        for event in pending_changes.events:
-            await websocket.send_json(event.model_dump(mode="json"))
+        if not pending_changes.reset_required:
+            for event in pending_changes.events:
+                await websocket.send_json(event.model_dump(mode="json"))
 
         await websocket.send_json(
             {
+                "reset_required": pending_changes.reset_required,
                 "type": "ready",
                 "workspace_id": workspace_id,
                 "sync_seq": get_latest_task_sync_seq(session, workspace_id),

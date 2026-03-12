@@ -255,6 +255,7 @@ def test_task_sync_snapshot_changes_and_stream(client: TestClient) -> None:
     create_response = client.post(
         f"/api/v1/workspaces/{workspace['id']}/tasks/ops",
         json={
+            "client_id": "tmp:realtime-task",
             "type": "create_task",
             "parent_id": root["id"],
             "title": "Realtime Task",
@@ -266,7 +267,28 @@ def test_task_sync_snapshot_changes_and_stream(client: TestClient) -> None:
     create_changeset = create_response.json()
     assert create_changeset["op_type"] == "create_task"
     assert create_changeset["op_id"] == "op-create-1"
+    assert len(create_changeset["id_mappings"]) == 1
+    assert create_changeset["id_mappings"][0]["client_id"] == "tmp:realtime-task"
+    assert any(
+        task["id"] == create_changeset["id_mappings"][0]["task_id"]
+        and task["title"] == "Realtime Task"
+        for task in create_changeset["upserts"]
+    )
     assert any(task["title"] == "Realtime Task" for task in create_changeset["upserts"])
+
+    duplicate_create_response = client.post(
+        f"/api/v1/workspaces/{workspace['id']}/tasks/ops",
+        json={
+            "client_id": "tmp:realtime-task",
+            "type": "create_task",
+            "parent_id": root["id"],
+            "title": "Realtime Task",
+            "op_id": "op-create-1",
+        },
+        headers=auth_headers(owner["access_token"]),
+    )
+    assert duplicate_create_response.status_code == 200
+    assert duplicate_create_response.json() == create_changeset
 
     changes_response = client.get(
         f"/api/v1/workspaces/{workspace['id']}/tasks/changes?since=0",
@@ -274,8 +296,17 @@ def test_task_sync_snapshot_changes_and_stream(client: TestClient) -> None:
     )
     assert changes_response.status_code == 200
     changes_payload = changes_response.json()
+    assert changes_payload["reset_required"] is False
     assert changes_payload["events"][-1]["op_type"] == "create_task"
     assert changes_payload["events"][-1]["sync_seq"] == create_changeset["sync_seq"]
+
+    future_changes_response = client.get(
+        f"/api/v1/workspaces/{workspace['id']}/tasks/changes?since={create_changeset['sync_seq'] + 10}",
+        headers=auth_headers(owner["access_token"]),
+    )
+    assert future_changes_response.status_code == 200
+    assert future_changes_response.json()["reset_required"] is True
+    assert future_changes_response.json()["events"] == []
 
     with client.websocket_connect(
         f"/api/v1/workspaces/{workspace['id']}/tasks/stream?token={owner['access_token']}&since=0"
@@ -284,7 +315,60 @@ def test_task_sync_snapshot_changes_and_stream(client: TestClient) -> None:
         assert first_message["op_type"] == "create_task"
         ready_message = websocket.receive_json()
         assert ready_message["type"] == "ready"
+        assert ready_message["reset_required"] is False
         assert ready_message["sync_seq"] >= create_changeset["sync_seq"]
+
+
+def test_task_ops_conflict_on_stale_meta_revision(client: TestClient) -> None:
+    owner = create_verified_user(client, "conflict-owner@rootspread.dev", "Conflict Owner")
+    workspace = create_workspace(client, owner["access_token"], name="Conflict Workspace")
+    root = get_system_root(client, owner["access_token"], workspace["id"])
+
+    create_response = client.post(
+        f"/api/v1/workspaces/{workspace['id']}/tasks/ops",
+        json={
+            "type": "create_task",
+            "parent_id": root["id"],
+            "title": "Conflict Task",
+            "op_id": "op-conflict-create",
+        },
+        headers=auth_headers(owner["access_token"]),
+    )
+    assert create_response.status_code == 200
+    created_task = next(
+        task for task in create_response.json()["upserts"] if task["node_kind"] == "task"
+    )
+
+    first_patch_response = client.post(
+        f"/api/v1/workspaces/{workspace['id']}/tasks/ops",
+        json={
+            "type": "patch_task",
+            "task_id": created_task["id"],
+            "title": "Conflict Task Updated",
+            "base_meta_revision": created_task["meta_revision"],
+            "op_id": "op-conflict-patch-1",
+        },
+        headers=auth_headers(owner["access_token"]),
+    )
+    assert first_patch_response.status_code == 200
+    updated_task = next(
+        task for task in first_patch_response.json()["upserts"] if task["id"] == created_task["id"]
+    )
+    assert updated_task["meta_revision"] > created_task["meta_revision"]
+
+    stale_patch_response = client.post(
+        f"/api/v1/workspaces/{workspace['id']}/tasks/ops",
+        json={
+            "type": "patch_task",
+            "task_id": created_task["id"],
+            "title": "Should Conflict",
+            "base_meta_revision": created_task["meta_revision"],
+            "op_id": "op-conflict-patch-2",
+        },
+        headers=auth_headers(owner["access_token"]),
+    )
+    assert stale_patch_response.status_code == 409
+    assert "请同步最新结果后再重试" in stale_patch_response.json()["detail"]
 
 
 def test_collab_document_persistence_endpoint(client: TestClient) -> None:

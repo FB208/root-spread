@@ -111,6 +111,7 @@ class TaskChangeset(BaseModel):
     sync_seq: int
     op_type: str
     op_id: str | None = None
+    id_mappings: list["TaskIdMapping"] = Field(default_factory=list)
     upserts: list[TaskNodeRead] = Field(default_factory=list)
     deletes: list[str] = Field(default_factory=list)
 
@@ -118,6 +119,7 @@ class TaskChangeset(BaseModel):
 class TaskChangesResponse(BaseModel):
     workspace_id: str
     sync_seq: int
+    reset_required: bool = False
     events: list[TaskChangeset] = Field(default_factory=list)
 
 
@@ -134,6 +136,9 @@ class TaskDocumentWriteRequest(BaseModel):
 
 class TaskOperationRequest(BaseModel):
     op_id: str | None = Field(default=None, max_length=128)
+    client_id: str | None = Field(default=None, max_length=128)
+    base_sync_seq: int | None = Field(default=None, ge=0)
+    base_meta_revision: int | None = Field(default=None, ge=0)
     type: Literal[
         "create_task",
         "patch_task",
@@ -179,4 +184,10 @@ class TaskStatusTransitionRead(ORMModel):
     updated_at: datetime
 
 
+class TaskIdMapping(BaseModel):
+    client_id: str = Field(max_length=128)
+    task_id: str
+
+
 TaskTreeNodeRead.model_rebuild()
+TaskChangeset.model_rebuild()

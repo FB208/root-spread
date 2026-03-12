@@ -269,6 +269,29 @@ describe("TaskMindmap", () => {
     expect(onRenameCancel).not.toHaveBeenCalled();
   });
 
+  it("keeps the title input focused when entering edit mode", async () => {
+    const onRenameCommit = vi.fn();
+
+    render(
+      <TaskMindmap
+        {...createProps({
+          editingTaskId: "child-1",
+          editingTitle: "新节点",
+          focusCanvasToken: 1,
+          onRenameCommit,
+        })}
+      />,
+    );
+
+    const editingInput = screen.getByDisplayValue("新节点");
+
+    await waitFor(() => {
+      expect(editingInput).toHaveFocus();
+    });
+
+    expect(onRenameCommit).not.toHaveBeenCalled();
+  });
+
   it("recenters the viewport around the selected node", async () => {
     const { rerender } = render(<TaskMindmap {...createProps({ selectedTaskId: "child-1" })} />);
 

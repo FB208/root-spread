@@ -7,6 +7,7 @@ from rootspread_api.models.task import TaskChangeEvent, TaskNode, TaskNodeKind
 from rootspread_api.schemas.task import (
     TaskChangesResponse,
     TaskChangeset,
+    TaskIdMapping,
     TaskNodeRead,
     TaskSnapshotResponse,
 )
@@ -104,6 +105,7 @@ def persist_task_changeset(
     upsert_ids: Sequence[str],
     delete_ids: Sequence[str],
     *,
+    id_mappings: Sequence[TaskIdMapping] | None = None,
     op_id: str | None = None,
 ) -> TaskChangeset:
     normalized_upsert_ids = list(dict.fromkeys(task_id for task_id in upsert_ids if task_id))
@@ -136,6 +138,7 @@ def persist_task_changeset(
             sync_seq=get_latest_task_sync_seq(session, workspace_id),
             op_type=op_type,
             op_id=op_id,
+            id_mappings=list(id_mappings or []),
         )
 
     event = TaskChangeEvent(
@@ -153,6 +156,7 @@ def persist_task_changeset(
         sync_seq=int(event.seq),
         op_type=op_type,
         op_id=op_id,
+        id_mappings=list(id_mappings or []),
         upserts=upserts,
         deletes=normalized_delete_ids,
     )
@@ -166,17 +170,44 @@ def list_task_changes_since(
     workspace_id: str,
     since: int,
 ) -> TaskChangesResponse:
+    latest_sync_seq = get_latest_task_sync_seq(session, workspace_id)
     events = session.scalars(
         select(TaskChangeEvent)
         .where(TaskChangeEvent.workspace_id == workspace_id, TaskChangeEvent.seq > since)
         .order_by(TaskChangeEvent.seq.asc())
     ).all()
     changesets = [TaskChangeset.model_validate(event.payload_json) for event in events]
-    sync_seq = (
-        changesets[-1].sync_seq if changesets else get_latest_task_sync_seq(session, workspace_id)
+    reset_required = since > latest_sync_seq or (
+        bool(changesets) and changesets[0].sync_seq != since + 1
     )
     return TaskChangesResponse(
         workspace_id=workspace_id,
-        sync_seq=sync_seq,
-        events=changesets,
+        sync_seq=latest_sync_seq,
+        reset_required=reset_required,
+        events=[] if reset_required else changesets,
     )
+
+
+def find_task_changeset_by_op_id(
+    session: Session,
+    workspace_id: str,
+    actor_user_id: str,
+    op_id: str | None,
+) -> TaskChangeset | None:
+    if not op_id:
+        return None
+
+    event = session.scalar(
+        select(TaskChangeEvent)
+        .where(
+            TaskChangeEvent.workspace_id == workspace_id,
+            TaskChangeEvent.actor_user_id == actor_user_id,
+            TaskChangeEvent.op_id == op_id,
+        )
+        .order_by(TaskChangeEvent.seq.desc())
+        .limit(1)
+    )
+    if event is None:
+        return None
+
+    return TaskChangeset.model_validate(event.payload_json)

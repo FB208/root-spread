@@ -187,6 +187,8 @@ export type TaskNodeKind = "system_root" | "task";
 
 export type TaskTreeNode = {
   id: string;
+  server_id?: string | null;
+  document_sync_mode?: "local" | "collab";
   workspace_id: string;
   parent_id: string | null;
   root_id: string;
@@ -208,11 +210,18 @@ export type TaskTreeNode = {
   status: TaskStatus;
   created_at: string;
   updated_at: string;
+  sync_state?: "synced" | "queued" | "sending" | "failed" | "conflict";
+  sync_error?: string | null;
   matched_filter: boolean;
   children: TaskTreeNode[];
 };
 
 export type TaskRecord = Omit<TaskTreeNode, "children" | "matched_filter">;
+
+export type TaskIdMapping = {
+  client_id: string;
+  task_id: string;
+};
 
 export type TaskTreeResponse = {
   root: TaskTreeNode;
@@ -230,6 +239,7 @@ export type TaskChangeset = {
   sync_seq: number;
   op_type: string;
   op_id?: string | null;
+  id_mappings: TaskIdMapping[];
   upserts: TaskRecord[];
   deletes: string[];
 };
@@ -237,7 +247,15 @@ export type TaskChangeset = {
 export type TaskChangesResponse = {
   workspace_id: string;
   sync_seq: number;
+  reset_required: boolean;
   events: TaskChangeset[];
+};
+
+export type TaskStreamReadyEvent = {
+  type: "ready";
+  workspace_id: string;
+  sync_seq: number;
+  reset_required: boolean;
 };
 
 export type TaskDocumentSnapshot = {
@@ -249,6 +267,9 @@ export type TaskDocumentSnapshot = {
 
 export type TaskOperationRequest = {
   op_id?: string;
+  client_id?: string | null;
+  base_sync_seq?: number | null;
+  base_meta_revision?: number | null;
   type:
     | "create_task"
     | "patch_task"

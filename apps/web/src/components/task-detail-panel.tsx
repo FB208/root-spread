@@ -8,18 +8,21 @@ import { type TaskStatus, type TaskStatusTransition, type TaskTreeNode, type Wor
 type TaskDetailPanelProps = {
   accessToken: string | null;
   autoFocusToken?: number;
+  onDiscardTaskChanges: (taskId: string) => Promise<void>;
   members: WorkspaceMember[];
   onDeleteTask: (taskId: string) => Promise<void>;
   onPatchTask: (
     taskId: string,
     patch: {
       assignee_user_id?: string | null;
+      content_markdown?: string | null;
       planned_due_at?: string | null;
       score?: number | null;
       title?: string;
       weight?: number;
     },
   ) => Promise<void>;
+  onRetryTaskSync: (taskId: string) => Promise<void>;
   onSetTaskStatus: (taskId: string, status: TaskStatus, remark?: string | null) => Promise<void>;
   readOnly: boolean;
   task: TaskTreeNode | null;
@@ -56,12 +59,42 @@ function transitionLabel(status: string | null) {
   }
 }
 
+function syncStateLabel(syncState: TaskTreeNode["sync_state"] | undefined, hasServerId: boolean) {
+  switch (syncState) {
+    case "sending":
+      return "同步中";
+    case "queued":
+      return hasServerId ? "待同步" : "待创建";
+    case "failed":
+      return "同步失败";
+    case "conflict":
+      return "存在冲突";
+    default:
+      return null;
+  }
+}
+
+function syncStateTone(syncState: TaskTreeNode["sync_state"] | undefined) {
+  switch (syncState) {
+    case "failed":
+    case "conflict":
+      return "border-rose-400/20 bg-rose-400/10 text-rose-100";
+    case "queued":
+    case "sending":
+      return "border-sky-400/20 bg-sky-400/10 text-sky-100";
+    default:
+      return "border-white/[0.08] bg-white/[0.03] text-white/78";
+  }
+}
+
 export function TaskDetailPanel({
   accessToken,
   autoFocusToken = 0,
+  onDiscardTaskChanges,
   members,
   onDeleteTask,
   onPatchTask,
+  onRetryTaskSync,
   onSetTaskStatus,
   readOnly,
   task,
@@ -85,9 +118,11 @@ export function TaskDetailPanel({
   const [message, setMessage] = useState<string | null>(null);
 
   const isSystemRoot = task?.node_kind === "system_root";
-  const isOptimisticTask = task?.id.startsWith("optimistic:") ?? false;
+  const serverTaskId = task?.server_id ?? null;
+  const isPendingTask = task !== null && !serverTaskId;
+  const taskSyncLabel = task ? syncStateLabel(task.sync_state, Boolean(serverTaskId)) : null;
   const canScore = workspaceRole === "owner" || workspaceRole === "admin";
-  const canMutate = !readOnly && task !== null && !isOptimisticTask;
+  const canMutate = !readOnly && task !== null;
   const canDelete = canMutate && !isSystemRoot;
   const taskStatus = task?.status ?? "in_progress";
 
@@ -116,7 +151,7 @@ export function TaskDetailPanel({
   }, [autoFocusToken, task, variant]);
 
   useEffect(() => {
-    if (readOnly || !task || isSystemRoot || isOptimisticTask || !accessToken) {
+    if (readOnly || !task || isSystemRoot || !serverTaskId || !accessToken) {
       setTransitions([]);
       return;
     }
@@ -138,7 +173,7 @@ export function TaskDetailPanel({
       try {
         setLoadingTransitions(true);
         const response = await apiRequest<TaskStatusTransition[]>(
-          `/workspaces/${workspaceId}/tasks/${currentTask.id}/transitions`,
+          `/workspaces/${workspaceId}/tasks/${serverTaskId}/transitions`,
           { token: currentToken },
         );
         if (!cancelled) {
@@ -164,7 +199,7 @@ export function TaskDetailPanel({
     return () => {
       cancelled = true;
     };
-  }, [accessToken, isOptimisticTask, isSystemRoot, readOnly, task, transitionCache, workspaceId]);
+  }, [accessToken, isSystemRoot, readOnly, serverTaskId, task, transitionCache, workspaceId]);
 
   const memberOptions = useMemo(
     () => members.map((member) => ({ label: member.user.display_name, value: member.user.id })),
@@ -248,6 +283,46 @@ export function TaskDetailPanel({
     }
   }
 
+  async function handleRetrySync() {
+    if (!task) {
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      setError(null);
+      setMessage(null);
+      await onRetryTaskSync(task.id);
+      setMessage("已重新加入同步队列。若存在冲突，会基于最新服务端版本重新尝试。");
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "重试同步失败。");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function handleDiscardPendingChanges() {
+    if (!task) {
+      return;
+    }
+
+    if (!window.confirm(`确认放弃节点「${task.title}」尚未同步的本地修改吗？`)) {
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      setError(null);
+      setMessage(null);
+      await onDiscardTaskChanges(task.id);
+      setMessage("已放弃该节点的本地未同步修改。");
+    } catch (submitError) {
+      setError(submitError instanceof Error ? submitError.message : "放弃本地修改失败。");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   const panelClassName =
     variant === "floating"
       ? "absolute bottom-2.5 left-2.5 right-2.5 z-20 overflow-auto rounded-[20px] border border-white/[0.1] bg-[rgba(7,10,18,0.92)] p-3.5 shadow-[0_22px_64px_rgba(0,0,0,0.38)] backdrop-blur xl:bottom-auto xl:left-auto xl:right-3 xl:top-3 xl:max-h-[calc(100%-1.5rem)] xl:w-[21rem]"
@@ -280,10 +355,10 @@ export function TaskDetailPanel({
           <span className="rounded-full border border-amber-400/20 bg-amber-400/10 px-2.5 py-1 text-xs text-amber-100">
             历史只读
           </span>
-        ) : isOptimisticTask ? (
-          <span className="rounded-full border border-sky-400/20 bg-sky-400/10 px-2.5 py-1 text-xs text-sky-100">
-            同步中
-          </span>
+        ) : taskSyncLabel ? (
+            <span className={`rounded-full border px-2.5 py-1 text-xs ${syncStateTone(task.sync_state)}`}>
+              {taskSyncLabel}
+            </span>
         ) : isSystemRoot ? (
           <span className="rounded-full border border-sky-400/20 bg-sky-400/10 px-2.5 py-1 text-xs text-sky-100">
             根节点
@@ -308,9 +383,17 @@ export function TaskDetailPanel({
 
         <div>
           <label className="field-label" htmlFor="task-content">
-            正文（协同 Markdown）
+            正文（Markdown）
           </label>
-          <TaskDocumentEditor accessToken={accessToken} readOnly={!canMutate} task={task} userName={userName} />
+          <TaskDocumentEditor
+            accessToken={accessToken}
+            onLocalDocumentChange={(contentMarkdown) => {
+              void onPatchTask(task.id, { content_markdown: contentMarkdown });
+            }}
+            readOnly={!canMutate}
+            task={task}
+            userName={userName}
+          />
         </div>
 
         {!isSystemRoot ? (
@@ -387,9 +470,23 @@ export function TaskDetailPanel({
            </div>
          )}
 
-        {isOptimisticTask ? (
+        {isPendingTask ? (
           <div className="rounded-[16px] border border-sky-400/18 bg-sky-400/6 px-3 py-2.5 text-sm text-sky-100/88">
-            节点正在同步到服务端，稍后即可继续编辑。
+            节点已在本地创建，服务端确认后会自动接入正文协同与状态流转记录。
+          </div>
+        ) : null}
+
+        {task.sync_state === "failed" || task.sync_state === "conflict" ? (
+          <div className="space-y-2 rounded-[16px] border border-rose-400/20 bg-rose-400/8 px-3 py-2.5 text-sm text-rose-100/90">
+            <p>{task.sync_error ?? (task.sync_state === "conflict" ? "该节点存在同步冲突，请选择重试或放弃本地修改。" : "该节点最近一次同步失败，请重试。")}</p>
+            <div className="flex flex-wrap gap-2">
+              <button className="primary-button" disabled={submitting} onClick={() => void handleRetrySync()} type="button">
+                重试同步
+              </button>
+              <button className="secondary-button" disabled={submitting} onClick={() => void handleDiscardPendingChanges()} type="button">
+                放弃本地修改
+              </button>
+            </div>
           </div>
         ) : null}
 
