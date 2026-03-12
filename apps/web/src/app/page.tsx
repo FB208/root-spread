@@ -107,12 +107,12 @@ export default function Home() {
       <div aria-hidden className="home-ambient-orb home-ambient-orb-three" />
 
       <ReactivePanel
-        className="panel sticky top-4 z-20 mb-4 flex items-center justify-between rounded-[18px] px-4 py-3 breathe-card"
+        className="panel sticky top-4 z-20 mb-4 flex items-center justify-between rounded-[16px] px-3.5 py-2.5 breathe-card"
         rotationLimit={4}
       >
         <div>
-          <p className="text-[10px] uppercase tracking-[0.32em] text-white/34">RootSpread</p>
-          <p className="mt-1 text-sm text-white/70">面向专业团队的任务地图控制台</p>
+          <p className="compact-kicker">RootSpread</p>
+          <p className="mt-1 text-[13px] text-white/70">面向专业团队的任务地图控制台</p>
         </div>
         <div className="hidden items-center gap-2 md:flex">
           <a className="secondary-button interactive-link" href="#architecture">
@@ -129,7 +129,7 @@ export default function Home() {
 
       <section className="grid gap-3 xl:grid-cols-[1.08fr_0.92fr]">
         <div className="grid gap-3">
-          <ReactivePanel className="panel rounded-[24px] p-6 sm:p-7 breathe-card" rotationLimit={5}>
+          <ReactivePanel className="panel rounded-[20px] p-5 sm:p-6 breathe-card" rotationLimit={5}>
             <div aria-hidden className="hero-orbit hero-orbit-one" />
             <div aria-hidden className="hero-orbit hero-orbit-two" />
 
@@ -138,18 +138,18 @@ export default function Home() {
               linear-inspired control room
             </span>
 
-            <div className="mt-5 grid gap-5 lg:grid-cols-[1.15fr_0.85fr] lg:items-end">
+            <div className="mt-4 grid gap-4 lg:grid-cols-[1.15fr_0.85fr] lg:items-end">
               <div>
-                <h1 className="max-w-3xl text-4xl font-semibold leading-[1.03] tracking-[-0.05em] text-white sm:text-5xl xl:text-6xl">
+                <h1 className="max-w-3xl text-3xl font-semibold leading-[1.04] tracking-[-0.05em] text-white sm:text-4xl xl:text-5xl">
                   把项目拆成一张
                   <span className="gradient-text">可执行、可追溯、可协作</span>
                   的任务地图
                 </h1>
-                <p className="mt-4 max-w-2xl text-sm leading-7 text-text-muted sm:text-base">
+                <p className="mt-3 max-w-2xl text-sm leading-6 text-text-muted sm:text-[15px]">
                   RootSpread 把项目、任务、里程碑和协作上下文收束到统一节点模型中，让结构浏览、执行推进和历史回看在同一套系统里完成。
                 </p>
 
-                <div className="mt-5 flex flex-wrap gap-2">
+                <div className="mt-4 flex flex-wrap gap-2">
                   <Link className="primary-button interactive-cta" href="/auth/register">
                     开始注册
                     <ArrowRight className="h-4 w-4" />
@@ -164,12 +164,12 @@ export default function Home() {
                 {heroMetrics.map(([label, value], index) => (
                   <ReactivePanel
                     key={label}
-                    className="rounded-[18px] border border-white/[0.08] bg-white/[0.03] px-4 py-3 breathe-card"
+                    className="compact-metric-card breathe-card"
                     rotationLimit={6}
                     style={{ animationDelay: `${index * 160}ms` }}
                   >
-                    <p className="text-[10px] uppercase tracking-[0.24em] text-white/30">{label}</p>
-                    <p className="mt-2 text-base font-semibold text-white/90">{value}</p>
+                    <p className="compact-metric-label">{label}</p>
+                    <p className="compact-metric-value text-base">{value}</p>
                   </ReactivePanel>
                 ))}
               </div>
@@ -177,34 +177,34 @@ export default function Home() {
           </ReactivePanel>
 
           <div className="grid gap-3 lg:grid-cols-[1.2fr_0.8fr]">
-            <ReactivePanel className="panel rounded-[22px] p-5 breathe-card" rotationLimit={5}>
+            <ReactivePanel className="panel rounded-[18px] p-4 breathe-card" rotationLimit={5}>
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] text-[#86efac]">
+                <div className="flex h-9 w-9 items-center justify-center rounded-[14px] border border-white/10 bg-white/[0.05] text-[#86efac]">
                   <ShieldCheck className="h-4.5 w-4.5" />
                 </div>
                 <div>
-                  <p className="text-[10px] uppercase tracking-[0.24em] text-white/32">Current Scope</p>
-                  <h2 className="mt-1 text-lg font-semibold text-white/90">P0-P3 控制台闭环</h2>
+                  <p className="compact-kicker">Current Scope</p>
+                  <h2 className="mt-1 text-base font-semibold text-white/90">P0-P3 控制台闭环</h2>
                 </div>
               </div>
-              <div className="mt-4 grid gap-2">
+              <div className="mt-3 grid gap-2">
                 {checkpoints.map((checkpoint) => (
                   <ReactivePanel
                     key={checkpoint}
-                    className="flex items-start gap-3 rounded-[16px] border border-white/[0.08] bg-white/[0.03] px-4 py-3 breathe-card"
+                    className="compact-list-card flex items-start gap-3 breathe-card"
                     rotationLimit={6}
                   >
-                    <span className="mt-1.5 h-2 w-2 rounded-full bg-accent shadow-[0_0_14px_rgba(139,144,255,0.8)]" />
-                    <p className="text-sm leading-6 text-white/72">{checkpoint}</p>
+                    <span className="mt-1.5 h-2 w-2 rounded-full bg-accent shadow-[0_0_12px_rgba(139,144,255,0.64)]" />
+                    <p className="text-[13px] leading-6 text-white/72">{checkpoint}</p>
                   </ReactivePanel>
                 ))}
               </div>
             </ReactivePanel>
 
-            <ReactivePanel className="panel rounded-[22px] p-5 breathe-card" rotationLimit={6} style={{ animationDelay: "180ms" }}>
-              <p className="text-[10px] uppercase tracking-[0.24em] text-white/32">Design Direction</p>
-              <h2 className="mt-2 text-lg font-semibold text-white/90">Linear 风格的深色管理台</h2>
-              <p className="mt-3 text-sm leading-6 text-text-muted">
+            <ReactivePanel className="panel rounded-[18px] p-4 breathe-card" rotationLimit={6} style={{ animationDelay: "180ms" }}>
+              <p className="compact-kicker">Design Direction</p>
+              <h2 className="compact-card-title">Linear 风格的深色管理台</h2>
+              <p className="compact-card-copy">
                 深色基底、精细描边、冷静渐变、高对齐度和紧凑留白，让复杂项目保持专业与秩序感。
               </p>
             </ReactivePanel>
@@ -221,15 +221,15 @@ export default function Home() {
           return (
             <ReactivePanel
               key={pillar.title}
-              className="panel rounded-[22px] p-5 breathe-card"
+              className="panel rounded-[18px] p-4 breathe-card"
               rotationLimit={7}
               style={{ animationDelay: `${index * 160}ms` }}
             >
-              <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] text-accent">
+              <div className="flex h-9 w-9 items-center justify-center rounded-[14px] border border-white/10 bg-white/[0.05] text-accent">
                 <Icon className="h-4.5 w-4.5" />
               </div>
-              <h3 className="mt-4 text-lg font-semibold text-white/88">{pillar.title}</h3>
-              <p className="mt-3 text-sm leading-7 text-text-muted">{pillar.description}</p>
+              <h3 className="mt-3 text-base font-semibold text-white/88">{pillar.title}</h3>
+              <p className="mt-2 text-sm leading-6 text-text-muted">{pillar.description}</p>
             </ReactivePanel>
           );
         })}
@@ -237,31 +237,31 @@ export default function Home() {
 
       <ReactivePanel
         id="roadmap"
-        className="panel mt-3 rounded-[24px] p-5 sm:p-6 breathe-card"
+        className="panel mt-3 rounded-[20px] p-4 sm:p-5 breathe-card"
         rotationLimit={4}
         style={{ animationDelay: "260ms" }}
       >
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div className="flex flex-col gap-2.5 lg:flex-row lg:items-end lg:justify-between">
           <div>
-            <p className="text-[10px] uppercase tracking-[0.24em] text-white/32">Roadmap</p>
-            <h2 className="mt-2 text-2xl font-semibold tracking-[-0.04em] text-white">从工程底座到任务树闭环</h2>
+            <p className="compact-kicker">Roadmap</p>
+            <h2 className="compact-title text-2xl">从工程底座到任务树闭环</h2>
           </div>
-          <p className="max-w-xl text-sm leading-7 text-text-muted">
+          <p className="max-w-xl text-sm leading-6 text-text-muted">
             先完成统一底层能力，再逐步推进行为权限、节点执行、历史归档和管理系统式工作台体验。
           </p>
         </div>
 
-        <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="mt-4 grid gap-2.5 md:grid-cols-2 xl:grid-cols-4">
           {roadmap.map(([phase, title, text], index) => (
             <ReactivePanel
               key={phase}
-              className="rounded-[18px] border border-white/[0.08] bg-white/[0.03] p-4 breathe-card"
+              className="compact-list-card breathe-card"
               rotationLimit={6}
               style={{ animationDelay: `${index * 140}ms` }}
             >
-              <p className="text-[10px] uppercase tracking-[0.24em] text-white/34">{phase}</p>
-              <h3 className="mt-3 text-base font-semibold text-white/90">{title}</h3>
-              <p className="mt-2 text-sm leading-6 text-text-muted">{text}</p>
+              <p className="compact-kicker">{phase}</p>
+              <h3 className="mt-2 text-[15px] font-semibold text-white/90">{title}</h3>
+              <p className="mt-1.5 text-[13px] leading-6 text-text-muted">{text}</p>
             </ReactivePanel>
           ))}
         </div>

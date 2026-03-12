@@ -30,7 +30,7 @@ const statusOptions: Array<{ label: string; value: TaskStatus }> = [
   { label: "终止", value: "terminated" },
 ];
 
-const TABLE_ROW_HEIGHT = 68;
+const TABLE_ROW_HEIGHT = 60;
 const TABLE_ROW_OVERSCAN = 8;
 const TABLE_VIEWPORT_FALLBACK = 520;
 
@@ -96,11 +96,13 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
   const [selectedTaskIds, setSelectedTaskIds] = useState<string[]>([]);
   const [draggingTaskId, setDraggingTaskId] = useState<string | null>(null);
   const [dropTargetTaskId, setDropTargetTaskId] = useState<string | null>(null);
+  const [isTreeDetailVisible, setIsTreeDetailVisible] = useState(true);
   const [tableScrollTop, setTableScrollTop] = useState(0);
   const [tableViewportHeight, setTableViewportHeight] = useState(TABLE_VIEWPORT_FALLBACK);
   const [treeFitViewToken, setTreeFitViewToken] = useState(0);
   const [canvasFocusToken, setCanvasFocusToken] = useState(0);
   const tableViewportRef = useRef<HTMLDivElement | null>(null);
+  const treeFullscreenRef = useRef<HTMLDivElement | null>(null);
   const detailFocusToken = 0;
 
   const selectedMilestoneId = searchParams.get("milestone") ?? "live";
@@ -168,6 +170,11 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
   const focusCanvas = useCallback(() => {
     setCanvasFocusToken((current) => current + 1);
   }, []);
+
+  const toggleTreeDetailVisibility = useCallback(() => {
+    setIsTreeDetailVisible((current) => !current);
+    focusCanvas();
+  }, [focusCanvas]);
 
   const handleSelectTask = useCallback(
     (taskId: string) => {
@@ -619,55 +626,45 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
 
   return (
     <div className="space-y-3">
-      <section className="panel rounded-[20px] px-4 py-4 sm:px-5">
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.24em] text-white/34">
-              <span>Task Workspace</span>
-              <span className="rounded-full border border-white/[0.08] px-2 py-1 text-white/48">{workspace.name}</span>
-              <span className="rounded-full border border-white/[0.08] px-2 py-1 text-white/48">
-                {isHistoryView ? "History Snapshot" : "System Root"}
-              </span>
-            </div>
-            <h2 className="mt-3 text-2xl font-semibold tracking-[-0.04em] text-white">任务工作区</h2>
-            <p className="mt-2 max-w-3xl text-sm text-text-muted">
-              新空间默认包含唯一系统根节点，导图内直接使用键盘扩展结构，不再通过额外卡片创建根或子节点。
-            </p>
+      <section className="panel rounded-[18px] px-3.5 py-2 sm:px-4">
+        <div className="flex flex-col gap-1.5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-white/52">
+            <span className="text-[10px] uppercase tracking-[0.18em] text-white/32">Workspace</span>
+            <span className="rounded-full border border-white/[0.08] px-2 py-0.5 text-white/60">{workspace.name}</span>
+            <span className="rounded-full border border-white/[0.08] px-2 py-0.5 text-white/48">
+              {isHistoryView ? "历史快照" : "系统根节点"}
+            </span>
+            <span className="rounded-full border border-white/[0.08] px-2 py-0.5 text-white/48">{visibleTaskCount} 个任务</span>
+            <span className="max-w-full truncate rounded-full border border-white/[0.08] px-2 py-0.5 text-white/48 sm:max-w-[18rem]">
+              焦点：{selectedTask?.title ?? "根节点"}
+            </span>
           </div>
 
-          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-            <div className="rounded-[16px] border border-white/[0.08] bg-white/[0.03] px-3 py-2.5">
-              <p className="text-[10px] uppercase tracking-[0.24em] text-white/30">Visible</p>
-              <p className="mt-1 text-base font-semibold text-white/90">{visibleTaskCount} 个任务</p>
-            </div>
-            <div className="rounded-[16px] border border-white/[0.08] bg-white/[0.03] px-3 py-2.5">
-              <p className="text-[10px] uppercase tracking-[0.24em] text-white/30">Focus</p>
-              <p className="mt-1 line-clamp-1 text-base font-semibold text-white/90">{selectedTask?.title ?? "根节点"}</p>
-            </div>
+          <div className="flex flex-wrap items-center gap-1.5">
             <Link
-              className="secondary-button h-full justify-center rounded-[16px] border-white/[0.08] bg-white/[0.03] px-3"
+              className="secondary-button h-8 justify-center rounded-xl border-white/[0.08] bg-white/[0.03] px-2.5 text-[11px]"
               href={`/workspaces/${workspace.id}/milestones`}
             >
-              里程碑管理
+              里程碑
             </Link>
             <Link
-              className="secondary-button h-full justify-center rounded-[16px] border-white/[0.08] bg-white/[0.03] px-3"
+              className="secondary-button h-8 justify-center rounded-xl border-white/[0.08] bg-white/[0.03] px-2.5 text-[11px]"
               href={`/workspaces/${workspace.id}/stats`}
             >
-              统计与审计
+              统计
             </Link>
           </div>
         </div>
       </section>
 
-      <section className="panel rounded-[20px] px-4 py-3 sm:px-5">
-        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-          <div className="flex flex-1 flex-wrap items-center gap-2">
+      <section className="panel rounded-[18px] px-3.5 py-2.5 sm:px-4">
+        <div className="flex flex-col gap-2.5 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex flex-1 flex-wrap items-center gap-1.5">
             <label className="field-label min-w-0" htmlFor="milestone-select">
               当前视图
             </label>
             <select
-              className="field-input w-full min-w-[14rem] max-w-[18rem]"
+              className="field-input w-full min-w-[12rem] max-w-[16rem]"
               id="milestone-select"
               onChange={(event) => setMilestoneFilter(event.target.value)}
               value={selectedMilestoneId}
@@ -680,16 +677,16 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
               ))}
             </select>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <button
-                className={viewMode === "tree" ? "primary-button" : "secondary-button"}
+                className={`${viewMode === "tree" ? "primary-button" : "secondary-button"} px-2.5`}
                 onClick={() => setViewMode("tree")}
                 type="button"
               >
                 思维导图
               </button>
               <button
-                className={viewMode === "table" ? "primary-button" : "secondary-button"}
+                className={`${viewMode === "table" ? "primary-button" : "secondary-button"} px-2.5`}
                 onClick={() => setViewMode("table")}
                 type="button"
               >
@@ -697,19 +694,13 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
               </button>
             </div>
 
-            <button className="secondary-button" onClick={expandAllBranches} type="button">
-              全展开
-            </button>
-            <button className="secondary-button" onClick={collapseAllBranches} type="button">
-              折叠子树
-            </button>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
             {statusOptions.map((option) => (
               <button
                 key={option.value}
-                className={selectedStatuses.includes(option.value) ? "primary-button" : "secondary-button"}
+                className={`${selectedStatuses.includes(option.value) ? "primary-button" : "secondary-button"} px-2.5`}
                 onClick={() => toggleStatus(option.value)}
                 type="button"
               >
@@ -722,79 +713,86 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
 
       {error ? <p className="text-sm text-rose-300">{error}</p> : null}
 
-      <section className="panel min-h-0 rounded-[22px] p-0 overflow-hidden">
-        <div className="flex flex-col gap-3 border-b border-white/[0.06] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <section className="panel min-h-0 overflow-hidden rounded-[20px] p-0">
+        <div className="flex flex-col gap-2 border-b border-white/[0.06] px-3.5 py-2.5 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-[10px] uppercase tracking-[0.24em] text-white/32">Task View</p>
-            <h3 className="mt-1 text-base font-semibold text-white/92">
+            <p className="text-[10px] uppercase tracking-[0.2em] text-white/30">Task View</p>
+            <h3 className="mt-1 text-sm font-semibold text-white/92 sm:text-[15px]">
               {selectedMilestoneId === "live" ? "当前任务树" : `历史快照 · ${activeMilestone?.name ?? "里程碑"}`}
             </h3>
           </div>
-          <div className="flex flex-wrap items-center gap-2 text-xs text-white/44">
-            <span className="rounded-full border border-white/[0.08] px-2.5 py-1">
+          <div className="flex flex-wrap items-center gap-1.5 text-[11px] text-white/44">
+            <span className="rounded-full border border-white/[0.08] px-2 py-0.5">
               {selectedMilestoneId === "live" ? "实时视图" : "只读快照"}
             </span>
             {!isHistoryView ? (
-              <span className="rounded-full border border-white/[0.08] px-2.5 py-1">
+              <span className="rounded-full border border-white/[0.08] px-2 py-0.5">
                 {liveConnected ? "协同在线" : "协同重连中"}
               </span>
             ) : null}
-            <span className="rounded-full border border-white/[0.08] px-2.5 py-1">
-              {viewMode === "tree" ? "Mind Map" : "Table Grid"}
+            <span className="rounded-full border border-white/[0.08] px-2 py-0.5">
+              {viewMode === "tree" ? "导图" : "表格"}
             </span>
-            <span className="rounded-full border border-white/[0.08] px-2.5 py-1">{visibleTaskCount} Tasks</span>
+            <span className="rounded-full border border-white/[0.08] px-2 py-0.5">{visibleTaskCount} Tasks</span>
           </div>
         </div>
 
         {loading ? (
-          <div className="flex min-h-[58vh] items-center justify-center px-5 py-10 text-sm text-white/72">
+          <div className="flex min-h-[56vh] items-center justify-center px-4 py-8 text-sm text-white/72">
             正在加载任务视图...
           </div>
         ) : rootTask ? (
-          <div className="relative min-h-0 p-3">
+          <div className="relative min-h-0 p-2.5" ref={treeFullscreenRef}>
             {viewMode === "tree" ? (
               <>
                 <TaskMindmap
                   allowReorder={!isHistoryView && selectedStatuses.length === 0}
                   collapsedTaskIds={collapsedTaskIdSet}
+                  detailVisible={isTreeDetailVisible}
                   editingTaskId={editingTaskId}
                   editingTitle={editingTitle}
                   fitViewToken={treeFitViewToken}
+                  fullscreenContainerRef={treeFullscreenRef}
                   focusCanvasToken={canvasFocusToken}
+                  onCollapseAll={collapseAllBranches}
                   onCreateChild={handleCreateChild}
                   onCreateSibling={handleCreateSibling}
                   onDeleteTask={(taskId) => void handleDeleteTask(taskId)}
+                  onExpandAll={expandAllBranches}
                   onReorderSiblings={(parentId, orderedTaskIds) => void handleMindmapReorder(parentId, orderedTaskIds)}
                   onRenameCancel={cancelInlineRename}
                   onRenameChange={setEditingTitle}
                   onRenameCommit={(taskId, title) => void commitInlineRename(taskId, title)}
                   onRenameStart={startInlineRename}
                   onSelectTask={handleSelectTask}
+                  onToggleDetailVisibility={toggleTreeDetailVisibility}
                   onToggleCollapse={toggleTaskCollapse}
                   readOnly={isHistoryView}
                   root={rootTask}
                   selectedTaskId={selectedTaskId}
                 />
-                <TaskDetailPanel
-                  accessToken={accessToken}
-                  autoFocusToken={detailFocusToken}
-                  members={members}
-                  onDeleteTask={deleteLiveTask}
-                  onPatchTask={patchLiveTask}
-                  onSetTaskStatus={setLiveTaskStatus}
-                  readOnly={isHistoryView}
-                  task={selectedTask}
-                  userName={userName}
-                  variant="floating"
-                  workspaceId={workspaceId}
-                  workspaceRole={workspace.role}
-                />
+                {isTreeDetailVisible ? (
+                  <TaskDetailPanel
+                    accessToken={accessToken}
+                    autoFocusToken={detailFocusToken}
+                    members={members}
+                    onDeleteTask={deleteLiveTask}
+                    onPatchTask={patchLiveTask}
+                    onSetTaskStatus={setLiveTaskStatus}
+                    readOnly={isHistoryView}
+                    task={selectedTask}
+                    userName={userName}
+                    variant="floating"
+                    workspaceId={workspaceId}
+                    workspaceRole={workspace.role}
+                  />
+                ) : null}
               </>
             ) : (
-              <div className="relative rounded-[16px] border border-white/[0.06] bg-white/[0.02]">
-                {selectedTaskIds.length ? (
-                  <div className="flex flex-wrap items-center gap-2 border-b border-white/[0.06] px-3 py-3">
-                    <span className="mr-1 text-sm text-white/72">已选择 {selectedTaskIds.length} 项</span>
+                <div className="relative rounded-[14px] border border-white/[0.06] bg-white/[0.02]">
+                  {selectedTaskIds.length ? (
+                    <div className="flex flex-wrap items-center gap-1.5 border-b border-white/[0.06] px-3 py-2.5">
+                      <span className="mr-1 text-sm text-white/72">已选择 {selectedTaskIds.length} 项</span>
                     {(["in_progress", "pending_review", "completed", "terminated"] as TaskStatus[]).map((status) => (
                       <button
                         key={status}
@@ -817,20 +815,20 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
                   </div>
                 ) : null}
 
-                <div className="flex items-center justify-between border-b border-white/[0.06] px-3 py-2 text-xs text-white/42">
-                  <span>窗口化渲染已启用，滚动时只绘制可视区附近行</span>
-                  <span>
-                    当前渲染 {virtualFlatTasks.length} / {flatTasks.length} 行
-                  </span>
+                  <div className="flex items-center justify-between border-b border-white/[0.06] px-3 py-1.5 text-[11px] text-white/42">
+                    <span>窗口化渲染已启用</span>
+                    <span>
+                      当前渲染 {virtualFlatTasks.length} / {flatTasks.length} 行
+                    </span>
                 </div>
 
-                <div
-                  data-testid="task-table-viewport"
-                  ref={tableViewportRef}
-                  className="max-h-[68vh] overflow-auto xl:max-h-[calc(100vh-14rem)]"
-                  onScroll={handleTableScroll}
-                >
-                  <table className="min-w-full border-collapse text-left text-[13px]">
+                  <div
+                    data-testid="task-table-viewport"
+                    ref={tableViewportRef}
+                    className="max-h-[70vh] overflow-auto xl:max-h-[calc(100vh-12.4rem)]"
+                    onScroll={handleTableScroll}
+                  >
+                    <table className="min-w-full border-collapse text-left text-[13px]">
                     <thead className="sticky top-0 z-10 bg-[#0d121d] shadow-[0_10px_30px_rgba(0,0,0,0.18)]">
                       <tr className="border-b border-white/[0.06] text-white/46">
                         <th className="px-3 py-2.5 font-medium">
@@ -862,7 +860,7 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
                         return (
                           <tr
                             key={task.id}
-                            className={`h-[68px] border-b align-middle text-white/76 last:border-b-0 ${
+                            className={`h-[60px] border-b align-middle text-white/76 last:border-b-0 ${
                               dropTargetTaskId === task.id
                                 ? "border-sky-400/40 bg-sky-400/8"
                                 : "border-white/[0.04] hover:bg-white/[0.02]"
@@ -892,7 +890,7 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
                               void handleReorderDrop(task.id);
                             }}
                           >
-                            <td className="px-3 py-2.5">
+                            <td className="px-3 py-2">
                               <input
                                 checked={selectedTaskIdSet.has(task.id)}
                                 className="h-4 w-4"
@@ -905,10 +903,10 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
                                 type="checkbox"
                               />
                             </td>
-                            <td className="px-3 py-2.5">
-                              <div className="flex items-center gap-2" style={{ paddingLeft: `${level * 14}px` }}>
+                            <td className="px-3 py-2">
+                              <div className="flex items-center gap-2" style={{ paddingLeft: `${level * 12}px` }}>
                                 <button
-                                  className="inline-flex h-6 w-6 cursor-grab items-center justify-center rounded-lg border border-white/[0.08] text-white/62 transition hover:border-white/[0.16] hover:text-white active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-30"
+                                  className="inline-flex h-[22px] w-[22px] cursor-grab items-center justify-center rounded-md border border-white/[0.08] text-white/62 transition hover:border-white/[0.16] hover:text-white active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-30"
                                   disabled={isHistoryView || isSystemRoot}
                                   draggable={!isHistoryView && !isSystemRoot}
                                   onClick={(event) => event.stopPropagation()}
@@ -923,7 +921,7 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
                                 </button>
                                 {taskIndex.get(task.id)?.children.length ? (
                                   <button
-                                    className="inline-flex h-6 w-6 items-center justify-center rounded-lg border border-white/[0.08] text-white/62 transition hover:border-white/[0.16] hover:text-white"
+                                    className="inline-flex h-[22px] w-[22px] items-center justify-center rounded-md border border-white/[0.08] text-white/62 transition hover:border-white/[0.16] hover:text-white"
                                     onClick={(event) => {
                                       event.stopPropagation();
                                       toggleTaskCollapse(task.id);
@@ -937,17 +935,17 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
                                     )}
                                   </button>
                                 ) : (
-                                  <span className="inline-flex h-6 w-6" />
+                                  <span className="inline-flex h-[22px] w-[22px]" />
                                 )}
                                 <div className="min-w-0">
-                                  <div className="truncate font-medium text-white/88">{task.title}</div>
-                                  <div className="mt-1 truncate text-[11px] text-text-muted">
+                                  <div className="truncate text-[13px] font-medium text-white/88">{task.title}</div>
+                                  <div className="mt-0.5 truncate text-[10px] text-text-muted">
                                     {isSystemRoot ? "系统根节点" : task.id}
                                   </div>
                                 </div>
                               </div>
                             </td>
-                            <td className="px-3 py-2.5 whitespace-nowrap">
+                            <td className="px-3 py-2 whitespace-nowrap">
                               {isSystemRoot ? (
                                 <span className="rounded-full border border-sky-400/25 bg-sky-400/10 px-2.5 py-1 text-xs text-sky-100">
                                   系统根节点
@@ -958,10 +956,10 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
                                 </span>
                               )}
                             </td>
-                            <td className="px-3 py-2.5 whitespace-nowrap">{isSystemRoot ? "-" : task.assignee_user_id ?? "未分配"}</td>
-                            <td className="px-3 py-2.5 whitespace-nowrap">{isSystemRoot ? "-" : task.weight}</td>
-                            <td className="px-3 py-2.5 whitespace-nowrap">{isSystemRoot ? "-" : task.score ?? "-"}</td>
-                            <td className="px-3 py-2.5 whitespace-nowrap">
+                            <td className="px-3 py-2 whitespace-nowrap">{isSystemRoot ? "-" : task.assignee_user_id ?? "未分配"}</td>
+                            <td className="px-3 py-2 whitespace-nowrap">{isSystemRoot ? "-" : task.weight}</td>
+                            <td className="px-3 py-2 whitespace-nowrap">{isSystemRoot ? "-" : task.score ?? "-"}</td>
+                            <td className="px-3 py-2 whitespace-nowrap">
                               {isSystemRoot
                                 ? "-"
                                 : task.planned_due_at

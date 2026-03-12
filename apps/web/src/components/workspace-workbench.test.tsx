@@ -37,7 +37,30 @@ vi.mock("@/components/task-detail-panel", () => ({
 }));
 
 vi.mock("@/components/task-mindmap", () => ({
-  TaskMindmap: () => <div data-testid="task-mindmap" />,
+  TaskMindmap: ({
+    detailVisible,
+    onCollapseAll,
+    onExpandAll,
+    onToggleDetailVisibility,
+  }: {
+    detailVisible: boolean;
+    onCollapseAll: () => void;
+    onExpandAll: () => void;
+    onToggleDetailVisibility: () => void;
+  }) => (
+    <div data-testid="task-mindmap">
+      <span>{detailVisible ? "详情已显示" : "详情已隐藏"}</span>
+      <button onClick={onExpandAll} type="button">
+        展开全部
+      </button>
+      <button onClick={onCollapseAll} type="button">
+        折叠全部
+      </button>
+      <button onClick={onToggleDetailVisibility} type="button">
+        {detailVisible ? "收起详情" : "显示详情"}
+      </button>
+    </div>
+  ),
 }));
 
 vi.mock("@/lib/task-sync", () => ({
@@ -131,7 +154,7 @@ describe("WorkspaceWorkbench", () => {
 
     const viewport = screen.getByTestId("task-table-viewport");
 
-    expect(screen.getByText("窗口化渲染已启用，滚动时只绘制可视区附近行")).toBeInTheDocument();
+    expect(screen.getByText("窗口化渲染已启用")).toBeInTheDocument();
     expect(within(viewport).getByText("任务 0")).toBeInTheDocument();
     expect(within(viewport).queryByText("任务 30")).not.toBeInTheDocument();
 
@@ -144,5 +167,25 @@ describe("WorkspaceWorkbench", () => {
 
     expect(within(viewport).getByText("任务 30")).toBeInTheDocument();
     expect(within(viewport).queryByText("任务 0")).not.toBeInTheDocument();
+  });
+
+  it("keeps expand collapse controls in the mindmap toolbar and toggles tree detail panel", async () => {
+    render(<WorkspaceWorkbench workspaceId="ws-1" />);
+
+    expect(screen.queryByRole("button", { name: "全展开" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "折叠子树" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "展开全部" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "折叠全部" })).toBeInTheDocument();
+    expect(screen.getByTestId("task-detail-panel")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "收起详情" }));
+
+    expect(screen.queryByTestId("task-detail-panel")).not.toBeInTheDocument();
+    expect(screen.getByText("详情已隐藏")).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "显示详情" }));
+
+    expect(screen.getByTestId("task-detail-panel")).toBeInTheDocument();
+    expect(screen.getByText("详情已显示")).toBeInTheDocument();
   });
 });

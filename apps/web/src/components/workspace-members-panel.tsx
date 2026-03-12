@@ -168,19 +168,21 @@ export function WorkspaceMembersPanel({
   }
 
   return (
-    <section className="panel rounded-[28px] p-6 sm:p-8" id="members">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+    <section className="panel rounded-[18px] p-4 sm:p-[18px]" id="members">
+      <div className="compact-page-header">
         <div>
-          <p className="text-xs uppercase tracking-[0.28em] text-white/38">Members</p>
-          <h2 className="mt-4 text-2xl font-semibold tracking-[-0.03em] text-white">团队成员管理</h2>
+          <p className="compact-kicker">Members</p>
+          <h2 className="compact-title">团队成员管理</h2>
         </div>
-        <p className="text-sm text-text-muted">
-          当前共 {members.length} 人{canManage ? "，可邀请成员并调整角色。" : "，当前账号仅可查看。"}
-        </p>
+        <div className="compact-chip-row">
+          <span className="compact-chip">成员 {members.length}</span>
+          <span className="compact-chip">邀请 {sortedInvitations.length}</span>
+          <span className="compact-chip">{canManage ? "可管理" : "只读查看"}</span>
+        </div>
       </div>
 
       {canManage ? (
-        <form className="mt-6 grid gap-4 lg:grid-cols-[1fr_180px_auto]" onSubmit={handleInvite}>
+        <form className="mt-4 grid gap-2.5 lg:grid-cols-[minmax(0,1fr)_148px_auto]" onSubmit={handleInvite}>
           <input
             className="field-input"
             onChange={(event) => setInviteEmail(event.target.value)}
@@ -202,15 +204,15 @@ export function WorkspaceMembersPanel({
         </form>
       ) : null}
 
-      {message ? <p className="mt-5 text-sm text-emerald-200">{message}</p> : null}
-      {error ? <p className="mt-3 text-sm text-rose-300">{error}</p> : null}
+      {message ? <p className="mt-3 text-sm text-emerald-200">{message}</p> : null}
+      {error ? <p className="mt-2.5 text-sm text-rose-300">{error}</p> : null}
       {debugToken ? (
-        <div className="mt-4 rounded-2xl border border-white/10 bg-[#081120] p-4 text-xs text-white/78">
+        <div className="compact-note mt-3.5">
           <p className="text-white/56">最近一次邀请调试信息</p>
-          <code className="mt-3 block overflow-x-auto rounded-2xl border border-white/10 bg-black/20 px-3 py-2">
+          <code className="compact-code-block mt-2.5">
             邀请 token: {debugToken}
           </code>
-          <div className="mt-4 flex flex-wrap gap-3">
+          <div className="mt-3 flex flex-wrap gap-2">
             <button className="secondary-button" onClick={() => void copyText("token", debugToken)} type="button">
               {copied === "token" ? "已复制 token" : "复制 token"}
             </button>
@@ -227,16 +229,16 @@ export function WorkspaceMembersPanel({
         </div>
       ) : null}
 
-      <div className="mt-6 rounded-[24px] border border-white/[0.08] bg-white/[0.04] p-5">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+      <div className="compact-section-card mt-4">
+        <div className="flex flex-col gap-1.5 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <p className="text-xs uppercase tracking-[0.24em] text-white/38">Invitations</p>
-            <h3 className="mt-3 text-lg font-semibold text-white/88">邀请状态</h3>
+            <p className="compact-kicker">Invitations</p>
+            <h3 className="compact-card-title">邀请状态</h3>
           </div>
-          <p className="text-sm text-text-muted">展示当前工作空间的邀请记录与处理状态。</p>
+          <p className="text-xs text-text-muted">展示当前工作空间的邀请记录与处理状态。</p>
         </div>
 
-        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="mt-3 grid gap-2.5 md:grid-cols-2 xl:grid-cols-3">
           {sortedInvitations.length ? (
             sortedInvitations.map((invitation) => {
               const invitationState = invitation.revoked_at
@@ -246,24 +248,21 @@ export function WorkspaceMembersPanel({
                   : "待接受";
 
               return (
-                <article
-                  key={invitation.id}
-                  className="rounded-[22px] border border-white/[0.08] bg-white/[0.03] p-4"
-                >
+                <article key={invitation.id} className="compact-list-card">
                   <div className="flex items-center justify-between gap-3">
-                    <p className="font-medium text-white/88">{invitation.email}</p>
-                    <span className="rounded-full border border-white/10 px-2.5 py-1 text-xs text-white/70">
+                    <p className="truncate text-sm font-medium text-white/88">{invitation.email}</p>
+                    <span className="compact-chip">
                       {invitationState}
                     </span>
                   </div>
-                  <div className="mt-3 space-y-1 text-sm text-text-muted">
+                  <div className="mt-2.5 space-y-1 text-[13px] text-text-muted">
                     <p>角色：{invitation.role}</p>
                     <p>过期：{new Date(invitation.expires_at).toLocaleString("zh-CN")}</p>
                     <p>创建：{new Date(invitation.created_at).toLocaleString("zh-CN")}</p>
                   </div>
                   {!invitation.accepted_at && !invitation.revoked_at && canManage ? (
                     <button
-                      className="secondary-button mt-4"
+                      className="secondary-button mt-3"
                       disabled={submitting}
                       onClick={() => void handleRevokeInvitation(invitation.id)}
                       type="button"
@@ -275,34 +274,39 @@ export function WorkspaceMembersPanel({
               );
             })
           ) : (
-            <div className="rounded-2xl border border-dashed border-white/[0.12] px-4 py-5 text-sm text-text-muted md:col-span-2 xl:col-span-3">
+            <div className="compact-empty-state md:col-span-2 xl:col-span-3">
               当前还没有邀请记录。
             </div>
           )}
         </div>
       </div>
 
-      <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      <div className="mt-4 flex items-center justify-between gap-3">
+        <div>
+          <p className="compact-kicker">People</p>
+          <h3 className="compact-card-title">当前成员</h3>
+        </div>
+        <span className="text-xs text-text-muted">按角色排序，便于快速调整权限</span>
+      </div>
+
+      <div className="mt-3 grid gap-2.5 md:grid-cols-2 xl:grid-cols-3">
         {sortedMembers.map((member) => (
-          <article
-            key={member.id}
-            className="rounded-[24px] border border-white/[0.08] bg-white/[0.04] p-5"
-          >
+          <article key={member.id} className="compact-list-card">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <p className="text-lg font-semibold text-white/88">{member.user.display_name}</p>
-                <p className="mt-1 text-sm text-text-muted">{member.user.email}</p>
+                <p className="text-[15px] font-semibold text-white/88">{member.user.display_name}</p>
+                <p className="mt-0.5 text-[13px] text-text-muted">{member.user.email}</p>
               </div>
-              <span className="rounded-full border border-white/10 px-3 py-1 text-xs text-white/72">
+              <span className="compact-chip">
                 {member.role}
               </span>
             </div>
-            <p className="mt-4 text-xs text-white/42">
+            <p className="mt-2.5 text-[11px] text-white/42">
               加入时间：{new Date(member.joined_at).toLocaleString("zh-CN")}
             </p>
 
             {canManage && member.role !== "owner" ? (
-              <div className="mt-5">
+              <div className="mt-3.5">
                 <label className="field-label" htmlFor={`member-role-${member.id}`}>
                   角色调整
                 </label>
@@ -316,7 +320,7 @@ export function WorkspaceMembersPanel({
                   <option value="admin">管理员</option>
                 </select>
                 <button
-                  className="secondary-button mt-4 w-full justify-center border-rose-400/18 text-rose-200 hover:border-rose-400/30 hover:text-rose-100"
+                  className="secondary-button mt-3 w-full justify-center border-rose-400/18 text-rose-200 hover:border-rose-400/30 hover:text-rose-100"
                   disabled={submitting}
                   onClick={() => void handleRemoveMember(member.id, member.user.display_name)}
                   type="button"

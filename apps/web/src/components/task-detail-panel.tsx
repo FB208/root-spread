@@ -250,15 +250,15 @@ export function TaskDetailPanel({
 
   const panelClassName =
     variant === "floating"
-      ? "absolute bottom-3 left-3 right-3 z-20 overflow-auto rounded-[24px] border border-white/[0.1] bg-[rgba(7,10,18,0.92)] p-4 shadow-[0_28px_80px_rgba(0,0,0,0.42)] backdrop-blur xl:bottom-auto xl:left-auto xl:right-4 xl:top-4 xl:max-h-[calc(100%-2rem)] xl:w-[24rem]"
-      : "panel rounded-[20px] p-4 xl:sticky xl:top-3 xl:h-[calc(100vh-1.5rem)] xl:overflow-auto";
+      ? "absolute bottom-2.5 left-2.5 right-2.5 z-20 overflow-auto rounded-[20px] border border-white/[0.1] bg-[rgba(7,10,18,0.92)] p-3.5 shadow-[0_22px_64px_rgba(0,0,0,0.38)] backdrop-blur xl:bottom-auto xl:left-auto xl:right-3 xl:top-3 xl:max-h-[calc(100%-1.5rem)] xl:w-[21rem]"
+      : "panel rounded-[18px] p-3.5 xl:sticky xl:top-2.5 xl:h-[calc(100vh-1rem)] xl:overflow-auto";
 
   if (!task) {
     return (
       <aside className={panelClassName}>
         <p className="text-[10px] uppercase tracking-[0.24em] text-white/34">Task Detail</p>
-        <h2 className="mt-2 text-lg font-semibold text-white">节点详情</h2>
-        <p className="mt-3 text-sm leading-7 text-text-muted">
+        <h2 className="mt-1.5 text-base font-semibold text-white">节点详情</h2>
+        <p className="mt-2 text-sm leading-6 text-text-muted">
           点击导图中的节点后，这里会显示详细信息。快捷键：`Tab` 新建下级，`Enter` 新建同级，`Delete`
           删除当前普通节点。
         </p>
@@ -271,8 +271,8 @@ export function TaskDetailPanel({
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="text-[10px] uppercase tracking-[0.24em] text-white/34">Task Detail</p>
-          <h2 className="mt-2 text-lg font-semibold text-white">{task.title}</h2>
-          <p className="mt-2 text-sm text-text-muted">
+          <h2 className="mt-1.5 text-base font-semibold text-white">{task.title}</h2>
+          <p className="mt-1.5 text-xs text-text-muted">
             {isSystemRoot ? "系统根节点" : `当前状态：${transitionLabel(taskStatus)} · 子任务 ${task.children.length} 个`}
           </p>
         </div>
@@ -291,7 +291,7 @@ export function TaskDetailPanel({
         ) : null}
       </div>
 
-      <form className="mt-4 space-y-3" onSubmit={handleSave}>
+      <form className="mt-3 space-y-2.5" onSubmit={handleSave}>
         <div>
           <label className="field-label" htmlFor="task-title">
             名称
@@ -315,7 +315,7 @@ export function TaskDetailPanel({
 
         {!isSystemRoot ? (
           <>
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-2.5 sm:grid-cols-2">
               <div>
                 <label className="field-label" htmlFor="task-assignee">
                   负责人
@@ -350,7 +350,7 @@ export function TaskDetailPanel({
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-2.5 sm:grid-cols-2">
               <div>
                 <label className="field-label" htmlFor="task-weight">
                   权重
@@ -382,13 +382,13 @@ export function TaskDetailPanel({
             </div>
           </>
         ) : (
-          <div className="rounded-[18px] border border-white/[0.08] bg-white/[0.03] p-3 text-sm text-text-muted">
-            根节点只作为整个工作空间的导图锚点，不参与状态流转、指派、排期、评分和删除。
-          </div>
-        )}
+           <div className="rounded-[16px] border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-sm text-text-muted">
+             根节点只作为整个工作空间的导图锚点，不参与状态流转、指派、排期、评分和删除。
+           </div>
+         )}
 
         {isOptimisticTask ? (
-          <div className="rounded-[18px] border border-sky-400/18 bg-sky-400/6 p-3 text-sm text-sky-100/88">
+          <div className="rounded-[16px] border border-sky-400/18 bg-sky-400/6 px-3 py-2.5 text-sm text-sky-100/88">
             节点正在同步到服务端，稍后即可继续编辑。
           </div>
         ) : null}
@@ -399,9 +399,9 @@ export function TaskDetailPanel({
       </form>
 
       {!isSystemRoot ? (
-        <div className="mt-4 rounded-[16px] border border-white/[0.08] bg-white/[0.03] p-3">
+        <div className="mt-3 rounded-[14px] border border-white/[0.08] bg-white/[0.03] p-2.5">
           <p className="text-[10px] uppercase tracking-[0.22em] text-white/34">Status Actions</p>
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
             {(["in_progress", "pending_review", "completed", "terminated"] as TaskStatus[]).map((status) => (
               <button
                 key={status}
@@ -415,7 +415,7 @@ export function TaskDetailPanel({
             ))}
           </div>
           <textarea
-            className="field-input mt-3 min-h-24 resize-y"
+            className="field-input mt-2.5 min-h-20 resize-y"
             disabled={!canMutate || submitting}
             onChange={(event) => setRemark(event.target.value)}
             placeholder="退回备注为选填，其他状态也可以补充说明"
@@ -423,22 +423,22 @@ export function TaskDetailPanel({
           />
         </div>
       ) : (
-        <div className="mt-4 rounded-[16px] border border-white/[0.08] bg-white/[0.03] p-3 text-sm text-text-muted">
+        <div className="mt-3 rounded-[14px] border border-white/[0.08] bg-white/[0.03] p-2.5 text-sm text-text-muted">
           <p>快捷键提示</p>
-          <p className="mt-2 leading-6">Tab 新建下级节点，Enter 为当前节点新增同级节点，Delete 删除当前普通节点。</p>
+          <p className="mt-1.5 leading-6">Tab 新建下级节点，Enter 为当前节点新增同级节点，Delete 删除当前普通节点。</p>
         </div>
       )}
 
       {!isSystemRoot ? (
-        <div className="mt-4 rounded-[16px] border border-white/[0.08] bg-white/[0.03] p-3">
+        <div className="mt-3 rounded-[14px] border border-white/[0.08] bg-white/[0.03] p-2.5">
           <div className="flex items-center justify-between gap-4">
             <p className="text-[10px] uppercase tracking-[0.22em] text-white/34">Transitions</p>
             {loadingTransitions ? <span className="text-xs text-white/42">加载中...</span> : null}
           </div>
-          <div className="mt-3 space-y-2">
+          <div className="mt-2.5 space-y-2">
             {transitions.length ? (
               transitions.slice(0, 6).map((transition) => (
-                <div key={transition.id} className="rounded-[14px] border border-white/[0.08] bg-black/10 px-3 py-2.5">
+                <div key={transition.id} className="rounded-[12px] border border-white/[0.08] bg-black/10 px-3 py-2">
                   <p className="text-sm text-white/82">
                     {transitionLabel(transition.from_status)} {"->"} {transitionLabel(transition.to_status)}
                   </p>
@@ -457,7 +457,7 @@ export function TaskDetailPanel({
 
       {canDelete ? (
         <button
-          className="secondary-button mt-4 w-full justify-center border-rose-400/18 text-rose-200 hover:border-rose-400/30 hover:text-rose-100"
+          className="secondary-button mt-3 w-full justify-center border-rose-400/18 text-rose-200 hover:border-rose-400/30 hover:text-rose-100"
           disabled={submitting}
           onClick={() => void handleDelete()}
           type="button"
@@ -466,7 +466,7 @@ export function TaskDetailPanel({
         </button>
       ) : null}
 
-      {message ? <p className="mt-4 text-sm text-emerald-200">{message}</p> : null}
+      {message ? <p className="mt-3 text-sm text-emerald-200">{message}</p> : null}
       {error ? <p className="mt-2 text-sm text-rose-300">{error}</p> : null}
     </aside>
   );

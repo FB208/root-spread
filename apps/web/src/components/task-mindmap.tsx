@@ -13,18 +13,33 @@ import {
   type Node,
   type NodeProps,
   type NodeTypes,
+  type ReactFlowInstance,
   getBezierPath,
   useReactFlow,
 } from "@xyflow/react";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import {
+  ChevronDown,
+  ChevronRight,
+  ChevronsDown,
+  ChevronsUp,
+  Crosshair,
+  Maximize2,
+  Minimize2,
+  PanelRightClose,
+  PanelRightOpen,
+  Scan,
+} from "lucide-react";
 import {
   memo,
   useCallback,
   useEffect,
   useMemo,
   useRef,
+  useState,
   type KeyboardEvent,
   type MouseEvent as ReactMouseEvent,
+  type ReactNode,
+  type RefObject,
 } from "react";
 
 import type { TaskTreeNode } from "@/lib/api";
@@ -33,19 +48,24 @@ import { buildMindmapLayout, type BranchDirection } from "@/lib/task-tree";
 type TaskMindmapProps = {
   allowReorder: boolean;
   collapsedTaskIds: Set<string>;
+  detailVisible: boolean;
   editingTaskId: string | null;
   editingTitle: string;
   fitViewToken: number;
+  fullscreenContainerRef?: RefObject<HTMLElement | null>;
   focusCanvasToken: number;
+  onCollapseAll: () => void;
   onCreateChild: (taskId: string) => void;
   onCreateSibling: (taskId: string) => void;
   onDeleteTask: (taskId: string) => void;
+  onExpandAll: () => void;
   onReorderSiblings: (parentId: string, orderedTaskIds: string[]) => void;
   onRenameCancel: () => void;
   onRenameChange: (title: string) => void;
   onRenameCommit: (taskId: string, title: string) => void;
   onRenameStart: (taskId: string) => void;
   onSelectTask: (taskId: string) => void;
+  onToggleDetailVisibility: () => void;
   onToggleCollapse: (taskId: string) => void;
   readOnly: boolean;
   root: TaskTreeNode | null;
@@ -71,19 +91,42 @@ type TaskCanvasNodeData = {
 
 type TaskCanvasFlowNode = Node<TaskCanvasNodeData, "taskNode">;
 
-const NODE_WIDTH = 188;
-const ROOT_NODE_WIDTH = 228;
-const NODE_HEIGHT = 72;
-const HORIZONTAL_GAP = 248;
-const VERTICAL_GAP = 26;
+const NODE_WIDTH = 172;
+const ROOT_NODE_WIDTH = 212;
+const NODE_HEIGHT = 64;
+const HORIZONTAL_GAP = 226;
+const VERTICAL_GAP = 20;
 const LAYOUT_OPTIONS = {
   horizontalGap: HORIZONTAL_GAP,
   nodeHeight: NODE_HEIGHT,
   originX: 0,
-  originY: 120,
+  originY: 104,
   rootGap: 0,
   verticalGap: VERTICAL_GAP,
 } as const;
+
+const TOOLBAR_BUTTON_CLASS =
+  "inline-flex h-9 w-9 items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.04] text-white/72 transition hover:border-white/[0.18] hover:bg-white/[0.08] hover:text-white disabled:cursor-not-allowed disabled:opacity-40";
+
+type ToolbarIconButtonProps = {
+  disabled?: boolean;
+  icon: ReactNode;
+  label: string;
+  onClick: () => void;
+};
+
+function ToolbarIconButton({ disabled = false, icon, label, onClick }: ToolbarIconButtonProps) {
+  return (
+    <div className="group relative flex">
+      <button aria-label={label} className={TOOLBAR_BUTTON_CLASS} disabled={disabled} onClick={onClick} title={label} type="button">
+        {icon}
+      </button>
+      <span className="pointer-events-none absolute bottom-full left-1/2 mb-2 -translate-x-1/2 translate-y-1 whitespace-nowrap rounded-full border border-white/[0.08] bg-[rgba(6,9,18,0.94)] px-2.5 py-1 text-xs text-white/82 opacity-0 shadow-[0_12px_28px_rgba(0,0,0,0.28)] transition duration-150 group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:translate-y-0 group-focus-within:opacity-100">
+        {label}
+      </span>
+    </div>
+  );
+}
 
 function toneByStatus(task: TaskTreeNode) {
   if (task.node_kind === "system_root") {
@@ -200,9 +243,9 @@ const TaskCanvasNode = memo(
 
     return (
       <div
-        className={`mindmap-node-drag-handle group relative rounded-full border px-5 py-3 text-center transition duration-150 ${
+        className={`mindmap-node-drag-handle group relative rounded-full border px-4 py-2.5 text-center transition duration-150 ${
           isSystemRoot ? "font-semibold tracking-[0.02em]" : "font-medium"
-        } ${selected ? "scale-[1.06]" : "hover:scale-[1.01]"}`}
+        } ${selected ? "scale-[1.04]" : "hover:scale-[1.005]"}`}
         data-selected={selected ? "true" : "false"}
         data-task-id={task.id}
         onContextMenu={(event) => event.preventDefault()}
@@ -242,13 +285,13 @@ const TaskCanvasNode = memo(
         {selected ? (
           <span
             aria-hidden="true"
-            className="absolute -top-1.5 left-1/2 h-2.5 w-2.5 -translate-x-1/2 rounded-full border border-white/70 bg-white"
+            className="absolute -top-1 left-1/2 h-2 w-2 -translate-x-1/2 rounded-full border border-white/70 bg-white"
           />
         ) : null}
 
         {hasChildren ? (
           <button
-            className={`absolute ${collapseAnchor} top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-full border border-white/[0.14] bg-[#060914] text-white/72 transition hover:border-white/[0.28] hover:text-white`}
+            className={`absolute ${collapseAnchor} top-1/2 inline-flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full border border-white/[0.14] bg-[#060914] text-white/72 transition hover:border-white/[0.28] hover:text-white`}
             onClick={(event) => {
               event.stopPropagation();
               onToggleCollapse(task.id);
@@ -264,7 +307,7 @@ const TaskCanvasNode = memo(
         {isEditing ? (
           <input
             ref={inputRef}
-            className="w-full rounded-full border border-white/20 bg-black/25 px-3 py-1 text-center text-[15px] leading-6 text-white outline-none ring-0"
+            className="w-full rounded-full border border-white/20 bg-black/25 px-3 py-1 text-center text-[14px] leading-5 text-white outline-none ring-0"
             onBlur={() => {
               if (skipBlurCommitRef.current) {
                 skipBlurCommitRef.current = false;
@@ -302,7 +345,7 @@ const TaskCanvasNode = memo(
             value={editingTitle}
           />
         ) : (
-          <span className="block truncate text-[15px] leading-6">{task.title}</span>
+          <span className="block truncate text-[14px] leading-5">{task.title}</span>
         )}
       </div>
     );
@@ -380,25 +423,31 @@ function AutoCenterSelectedNode({
 export function TaskMindmap({
   allowReorder,
   collapsedTaskIds,
+  detailVisible,
   editingTaskId,
   editingTitle,
   fitViewToken,
+  fullscreenContainerRef,
   focusCanvasToken,
+  onCollapseAll,
   onCreateChild,
   onCreateSibling,
   onDeleteTask,
+  onExpandAll,
   onReorderSiblings,
   onRenameCancel,
   onRenameChange,
   onRenameCommit,
   onRenameStart,
   onSelectTask,
+  onToggleDetailVisibility,
   onToggleCollapse,
   readOnly,
   root,
   selectedTaskId,
 }: TaskMindmapProps) {
   const canvasRef = useRef<HTMLDivElement | null>(null);
+  const reactFlowRef = useRef<ReactFlowInstance | null>(null);
   const handlersRef = useRef({
     onRenameCancel,
     onRenameChange,
@@ -407,6 +456,11 @@ export function TaskMindmap({
     onSelectTask,
     onToggleCollapse,
   });
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const getFullscreenTarget = useCallback(
+    () => fullscreenContainerRef?.current ?? canvasRef.current,
+    [fullscreenContainerRef],
+  );
   const layout = useMemo(() => buildMindmapLayout(root, collapsedTaskIds, LAYOUT_OPTIONS), [collapsedTaskIds, root]);
   const taskMap = useMemo(() => new Map(layout.nodes.map((node) => [node.id, node.task])), [layout.nodes]);
   const layoutNodeMap = useMemo(() => new Map(layout.nodes.map((node) => [node.id, node])), [layout.nodes]);
@@ -416,6 +470,23 @@ export function TaskMindmap({
     () => new Map(layout.nodes.map((node) => [node.id, toneByStatus(node.task)])),
     [layout.nodes],
   );
+  const selectedLayoutNode = useMemo(() => {
+    if (!selectedTaskId) {
+      return null;
+    }
+
+    const node = layout.nodes.find((item) => item.id === selectedTaskId);
+    if (!node) {
+      return null;
+    }
+
+    return {
+      id: node.id,
+      width: node.task.node_kind === "system_root" ? ROOT_NODE_WIDTH : NODE_WIDTH,
+      x: node.x,
+      y: node.y,
+    };
+  }, [layout.nodes, selectedTaskId]);
 
   useEffect(() => {
     handlersRef.current = {
@@ -427,6 +498,19 @@ export function TaskMindmap({
       onToggleCollapse,
     };
   }, [onRenameCancel, onRenameChange, onRenameCommit, onRenameStart, onSelectTask, onToggleCollapse]);
+
+  useEffect(() => {
+    const syncFullscreenState = () => {
+      setIsFullscreen(document.fullscreenElement === getFullscreenTarget());
+    };
+
+    syncFullscreenState();
+    document.addEventListener("fullscreenchange", syncFullscreenState);
+
+    return () => {
+      document.removeEventListener("fullscreenchange", syncFullscreenState);
+    };
+  }, [getFullscreenTarget]);
 
   const focusCanvas = useCallback(() => {
     canvasRef.current?.focus({ preventScroll: true });
@@ -455,6 +539,49 @@ export function TaskMindmap({
   const handleNodeToggleCollapse = useCallback((taskId: string) => {
     handlersRef.current.onToggleCollapse(taskId);
   }, []);
+
+  const handleFitView = useCallback(() => {
+    if (!reactFlowRef.current) {
+      return;
+    }
+
+    void reactFlowRef.current.fitView({ duration: 220, padding: 0.2, minZoom: 0.28, maxZoom: 1.1 });
+    focusCanvas();
+  }, [focusCanvas]);
+
+  const handleCenterSelectedTask = useCallback(() => {
+    if (!reactFlowRef.current || !selectedLayoutNode) {
+      return;
+    }
+
+    void reactFlowRef.current.setCenter(selectedLayoutNode.x + selectedLayoutNode.width / 2 - 96, selectedLayoutNode.y + NODE_HEIGHT / 2, {
+      duration: 220,
+      zoom: reactFlowRef.current.getZoom(),
+    });
+    focusCanvas();
+  }, [focusCanvas, selectedLayoutNode]);
+
+  const handleToggleFullscreen = useCallback(async () => {
+    const fullscreenTarget = getFullscreenTarget();
+    if (!fullscreenTarget) {
+      return;
+    }
+
+    try {
+      if (document.fullscreenElement === fullscreenTarget) {
+        await document.exitFullscreen?.();
+      } else {
+        if (document.fullscreenElement) {
+          await document.exitFullscreen?.();
+        }
+        await fullscreenTarget.requestFullscreen?.();
+      }
+    } catch {
+      return;
+    } finally {
+      focusCanvas();
+    }
+  }, [focusCanvas, getFullscreenTarget]);
 
   const handleNodeDragStop = useCallback(
     (_event: unknown, node: { id: string; position: { y: number } }) => {
@@ -695,28 +822,12 @@ export function TaskMindmap({
       }),
     [layout.edges, toneMap],
   );
-  const selectedLayoutNode = useMemo(() => {
-    if (!selectedTaskId) {
-      return null;
-    }
-
-    const node = layout.nodes.find((item) => item.id === selectedTaskId);
-    if (!node) {
-      return null;
-    }
-
-    return {
-      id: node.id,
-      width: node.task.node_kind === "system_root" ? ROOT_NODE_WIDTH : NODE_WIDTH,
-      x: node.x,
-      y: node.y,
-    };
-  }, [layout.nodes, selectedTaskId]);
-
   return (
-    <div
-      ref={canvasRef}
-      className="relative h-[68vh] min-h-[560px] overflow-hidden rounded-[22px] border border-white/[0.08] bg-[linear-gradient(180deg,rgba(8,11,19,0.98),rgba(5,7,14,0.96))] outline-none xl:h-[calc(100vh-14rem)]"
+      <div
+        ref={canvasRef}
+        className={`relative overflow-hidden border border-white/[0.08] bg-[linear-gradient(180deg,rgba(8,11,19,0.98),rgba(5,7,14,0.96))] outline-none ${
+        isFullscreen ? "h-full rounded-none" : "h-[66vh] min-h-[520px] rounded-[20px] xl:h-[calc(100vh-12.4rem)]"
+      }`}
       data-testid="task-mindmap-canvas"
       onContextMenu={(event) => event.preventDefault()}
       onKeyDown={handleKeyDown}
@@ -729,20 +840,46 @@ export function TaskMindmap({
       }}
       tabIndex={0}
     >
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col gap-3 border-b border-white/[0.06] bg-[linear-gradient(180deg,rgba(7,10,17,0.96),rgba(7,10,17,0.84),transparent)] px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col gap-2 border-b border-white/[0.06] bg-[linear-gradient(180deg,rgba(7,10,17,0.96),rgba(7,10,17,0.84),transparent)] px-3.5 py-2.5 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <p className="text-[10px] uppercase tracking-[0.24em] text-white/32">Mind Map</p>
-          <p className="mt-1 text-sm text-white/70">点击节点后可连续使用 Tab / Enter / Delete，不会被详情面板抢走焦点</p>
+          <p className="text-[10px] uppercase tracking-[0.18em] text-white/30">Mind Map</p>
         </div>
-        <div className="flex flex-wrap gap-2 text-[10px] uppercase tracking-[0.18em] text-white/34">
-          <span className="rounded-full border border-emerald-400/20 px-2 py-1 text-emerald-200/80">完成</span>
-          <span className="rounded-full border border-amber-400/20 px-2 py-1 text-amber-100/80">待验证</span>
-          <span className="rounded-full border border-sky-400/20 px-2 py-1 text-sky-100/80">进行中</span>
-          <span className="rounded-full border border-rose-400/20 px-2 py-1 text-rose-100/80">终止</span>
+        <div className="flex flex-wrap gap-1.5 text-[10px] uppercase tracking-[0.14em] text-white/34">
+          <span className="rounded-full border border-emerald-400/20 px-2 py-0.5 text-emerald-200/80">完成</span>
+          <span className="rounded-full border border-amber-400/20 px-2 py-0.5 text-amber-100/80">待验证</span>
+          <span className="rounded-full border border-sky-400/20 px-2 py-0.5 text-sky-100/80">进行中</span>
+          <span className="rounded-full border border-rose-400/20 px-2 py-0.5 text-rose-100/80">终止</span>
         </div>
       </div>
 
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(45,92,196,0.12),transparent_30%),radial-gradient(circle_at_top_left,rgba(101,163,255,0.08),transparent_25%),radial-gradient(circle_at_bottom_right,rgba(52,211,153,0.06),transparent_22%)]" />
+
+      <div className="absolute inset-x-0 bottom-3 z-30 flex justify-center px-3.5">
+        <div
+          className="flex flex-wrap items-center justify-center gap-1.5 rounded-full border border-white/[0.08] bg-[rgba(6,9,18,0.82)] px-2.5 py-1.5 shadow-[0_16px_38px_rgba(0,0,0,0.32)] backdrop-blur-md"
+          data-testid="task-mindmap-toolbar"
+        >
+          <ToolbarIconButton
+            icon={isFullscreen ? <Minimize2 className="h-[18px] w-[18px]" /> : <Maximize2 className="h-[18px] w-[18px]" />}
+            label={isFullscreen ? "退出全屏" : "全屏"}
+            onClick={() => void handleToggleFullscreen()}
+          />
+          <ToolbarIconButton icon={<Scan className="h-[18px] w-[18px]" />} label="适配视图" onClick={handleFitView} />
+          <ToolbarIconButton icon={<ChevronsDown className="h-[18px] w-[18px]" />} label="展开全部" onClick={onExpandAll} />
+          <ToolbarIconButton icon={<ChevronsUp className="h-[18px] w-[18px]" />} label="折叠全部" onClick={onCollapseAll} />
+          <ToolbarIconButton
+            disabled={!selectedLayoutNode}
+            icon={<Crosshair className="h-[18px] w-[18px]" />}
+            label="聚焦当前节点"
+            onClick={handleCenterSelectedTask}
+          />
+          <ToolbarIconButton
+            icon={detailVisible ? <PanelRightClose className="h-[18px] w-[18px]" /> : <PanelRightOpen className="h-[18px] w-[18px]" />}
+            label={detailVisible ? "收起详情" : "显示详情"}
+            onClick={onToggleDetailVisibility}
+          />
+        </div>
+      </div>
 
       <ReactFlow
         edges={edges}
@@ -753,6 +890,9 @@ export function TaskMindmap({
         nodeTypes={nodeTypes}
         nodes={nodes}
         nodeDragThreshold={8}
+        onInit={(instance) => {
+          reactFlowRef.current = instance;
+        }}
         onNodeClick={handleNodeClick}
         onNodeDoubleClick={handleNodeDoubleClick}
         onNodeDragStop={handleNodeDragStop}

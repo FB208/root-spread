@@ -67,9 +67,9 @@ function WorkspaceShellFrame({ children, workspaceId }: WorkspaceShellFrameProps
 
   if (loading) {
     return (
-      <main className="min-h-screen px-4 py-4 md:pl-[17rem] md:pr-4">
+      <main className="min-h-screen px-4 py-4 md:pl-[15.75rem] md:pr-4">
         <div className="flex min-h-[calc(100vh-2rem)] items-center justify-center">
-          <div className="panel rounded-[22px] px-6 py-4 text-sm text-white/72">正在构建工作台布局...</div>
+          <div className="panel rounded-[18px] px-5 py-3 text-sm text-white/72">正在构建工作台布局...</div>
         </div>
       </main>
     );
@@ -77,15 +77,15 @@ function WorkspaceShellFrame({ children, workspaceId }: WorkspaceShellFrameProps
 
   if (!workspace) {
     return (
-      <main className="min-h-screen px-4 py-4 md:pl-[17rem] md:pr-4">
+      <main className="min-h-screen px-4 py-4 md:pl-[15.75rem] md:pr-4">
         <div className="flex min-h-[calc(100vh-2rem)] items-center justify-center">
-          <div className="panel w-full max-w-3xl rounded-[24px] p-7 sm:p-8">
+          <div className="panel w-full max-w-3xl rounded-[20px] p-6 sm:p-7">
             <p className="text-[11px] uppercase tracking-[0.28em] text-white/34">Workspace Studio</p>
-            <h1 className="mt-4 text-3xl font-semibold tracking-[-0.04em] text-white">暂时无法进入这个工作空间</h1>
-            <p className="mt-4 text-sm leading-7 text-text-muted">
+            <h1 className="mt-3 text-2xl font-semibold tracking-[-0.04em] text-white">暂时无法进入这个工作空间</h1>
+            <p className="mt-3 text-sm leading-6 text-text-muted">
               {error ?? "请先登录，或确认当前账号已经加入该工作空间。"}
             </p>
-            <div className="mt-6 flex flex-wrap gap-2">
+            <div className="mt-5 flex flex-wrap gap-2">
               <Link className="primary-button" href="/workspaces">
                 返回空间列表
               </Link>
@@ -112,18 +112,18 @@ function WorkspaceShellFrame({ children, workspaceId }: WorkspaceShellFrameProps
         />
       ) : null}
 
-      <div className="min-h-screen md:grid md:h-screen md:grid-cols-[16.5rem_minmax(0,1fr)]">
+      <div className="min-h-screen md:grid md:h-screen md:grid-cols-[15rem_minmax(0,1fr)]">
         <aside
-          className={`workspace-sidebar panel fixed inset-y-0 left-0 z-50 w-[16.5rem] rounded-none transition duration-200 md:sticky md:top-0 md:z-20 md:h-screen md:translate-x-0 ${
+          className={`workspace-sidebar panel fixed inset-y-0 left-0 z-50 w-[15rem] rounded-none transition duration-200 md:sticky md:top-0 md:z-20 md:h-screen md:translate-x-0 ${
             mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
           }`}
         >
-          <div className="flex h-full flex-col overflow-y-auto px-4 py-4">
-            <div className="flex items-start justify-between gap-3 border-b border-white/[0.06] pb-4">
+          <div className="flex h-full flex-col overflow-y-auto px-3.5 py-3.5">
+            <div className="flex items-start justify-between gap-3 border-b border-white/[0.06] pb-3">
               <div>
                 <p className="text-[10px] uppercase tracking-[0.3em] text-white/34">RootSpread</p>
-                <h1 className="mt-2 text-base font-semibold text-white/92">{workspace.name}</h1>
-                <p className="mt-1 text-xs text-text-muted">{workspace.slug}</p>
+                <h1 className="mt-1.5 text-[15px] font-semibold text-white/92">{workspace.name}</h1>
+                <p className="mt-0.5 truncate text-[11px] text-text-muted">{workspace.slug}</p>
               </div>
               <button
                 aria-label="关闭菜单"
@@ -135,27 +135,15 @@ function WorkspaceShellFrame({ children, workspaceId }: WorkspaceShellFrameProps
               </button>
             </div>
 
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              <div className="rounded-[14px] border border-white/[0.06] bg-white/[0.03] px-3 py-2.5">
-                <p className="text-[10px] uppercase tracking-[0.22em] text-white/30">Role</p>
-                <p className="mt-1 text-xs font-medium text-white/86">{workspace.role}</p>
-              </div>
-              <div className="rounded-[14px] border border-white/[0.06] bg-white/[0.03] px-3 py-2.5">
-                <p className="text-[10px] uppercase tracking-[0.22em] text-white/30">Members</p>
-                <p className="mt-1 text-xs font-medium text-white/86">{members.length} 人</p>
-              </div>
-              <div className="rounded-[14px] border border-white/[0.06] bg-white/[0.03] px-3 py-2.5">
-                <p className="text-[10px] uppercase tracking-[0.22em] text-white/30">Milestones</p>
-                <p className="mt-1 text-xs font-medium text-white/86">{milestones.length} 个</p>
-              </div>
-              <div className="rounded-[14px] border border-white/[0.06] bg-white/[0.03] px-3 py-2.5">
-                <p className="text-[10px] uppercase tracking-[0.22em] text-white/30">Mode</p>
-                <p className="mt-1 text-xs font-medium text-white/86">Studio</p>
-              </div>
+            <div className="mt-3 flex flex-wrap gap-1.5 text-[11px] text-white/56">
+              <span className="rounded-full border border-white/[0.07] bg-white/[0.03] px-2.5 py-1">角色 {workspace.role}</span>
+              <span className="rounded-full border border-white/[0.07] bg-white/[0.03] px-2.5 py-1">成员 {members.length}</span>
+              <span className="rounded-full border border-white/[0.07] bg-white/[0.03] px-2.5 py-1">里程碑 {milestones.length}</span>
+              <span className="rounded-full border border-white/[0.07] bg-white/[0.03] px-2.5 py-1">工作台</span>
             </div>
 
-            <nav className="mt-5 flex flex-1 flex-col gap-1.5">
-              <p className="px-1 text-[10px] uppercase tracking-[0.26em] text-white/24">Workspace Modules</p>
+            <nav className="mt-4 flex flex-1 flex-col gap-1">
+              <p className="px-1 text-[10px] uppercase tracking-[0.22em] text-white/24">Workspace</p>
               {navItems.map((item) => {
                 const active = pathname === item.href || pathname.startsWith(`${item.href}/`);
                 const Icon = item.icon;
@@ -167,24 +155,24 @@ function WorkspaceShellFrame({ children, workspaceId }: WorkspaceShellFrameProps
                     data-active={active ? "true" : "false"}
                     href={item.href}
                     onClick={() => setMobileMenuOpen(false)}
+                    title={item.description}
                   >
                     <span className="workspace-nav-icon">
-                      <Icon className="h-4 w-4" />
+                      <Icon className="h-3.5 w-3.5" />
                     </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block text-[13px] font-semibold">{item.label}</span>
-                      <span className="mt-1 block text-[11px] leading-5 text-white/40">{item.description}</span>
+                    <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-white/88">
+                      {item.label}
                     </span>
                   </Link>
                 );
               })}
             </nav>
 
-            <div className="space-y-2 border-t border-white/[0.06] pt-4">
-              <button className="secondary-button w-full" onClick={() => void refreshWorkspaceData()} type="button">
+            <div className="space-y-2 border-t border-white/[0.06] pt-3">
+              <button className="secondary-button w-full justify-center" onClick={() => void refreshWorkspaceData()} type="button">
                 刷新空间数据
               </button>
-              <Link className="secondary-button w-full" href="/workspaces" onClick={() => setMobileMenuOpen(false)}>
+              <Link className="secondary-button w-full justify-center" href="/workspaces" onClick={() => setMobileMenuOpen(false)}>
                 <ArrowLeft className="h-4 w-4" />
                 返回空间列表
               </Link>
@@ -194,10 +182,10 @@ function WorkspaceShellFrame({ children, workspaceId }: WorkspaceShellFrameProps
 
         <main className="min-w-0 md:h-screen">
           <div className="flex h-full min-h-0 flex-col">
-            <header className="panel m-3 flex items-center justify-between rounded-[18px] px-4 py-3 md:hidden">
+            <header className="panel m-3 flex items-center justify-between rounded-[16px] px-3.5 py-2.5 md:hidden">
               <div>
-                <p className="text-[10px] uppercase tracking-[0.28em] text-white/30">Workspace</p>
-                <p className="mt-1 text-sm font-semibold text-white/90">{workspace.name}</p>
+                <p className="text-[10px] uppercase tracking-[0.22em] text-white/30">Workspace</p>
+                <p className="mt-1 text-[13px] font-semibold text-white/90">{workspace.name}</p>
               </div>
               <button className="secondary-button" onClick={() => setMobileMenuOpen(true)} type="button">
                 <Menu className="h-4 w-4" />
@@ -205,9 +193,9 @@ function WorkspaceShellFrame({ children, workspaceId }: WorkspaceShellFrameProps
               </button>
             </header>
 
-            <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-0 md:pt-3">
+            <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3 pt-0 md:pt-2.5">
               {error ? (
-                <div className="mb-3 rounded-[16px] border border-amber-400/18 bg-amber-400/8 px-4 py-3 text-sm text-amber-100">
+                <div className="mb-3 rounded-[14px] border border-amber-400/18 bg-amber-400/8 px-3.5 py-2.5 text-sm text-amber-100">
                   工作空间信息刷新失败：{error}
                 </div>
               ) : null}

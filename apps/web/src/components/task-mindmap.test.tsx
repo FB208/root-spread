@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { ComponentType, ReactNode } from "react";
+import { useEffect, type ComponentProps, type ComponentType, type ReactNode } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { TaskMindmap } from "@/components/task-mindmap";
@@ -8,6 +8,22 @@ import type { TaskTreeNode } from "@/lib/api";
 const fitViewMock = vi.fn();
 const setCenterMock = vi.fn();
 const getZoomMock = vi.fn(() => 0.72);
+const requestFullscreenMock = vi.fn(function (this: HTMLElement) {
+  Object.defineProperty(document, "fullscreenElement", {
+    configurable: true,
+    value: this,
+  });
+  document.dispatchEvent(new Event("fullscreenchange"));
+  return Promise.resolve();
+});
+const exitFullscreenMock = vi.fn(() => {
+  Object.defineProperty(document, "fullscreenElement", {
+    configurable: true,
+    value: null,
+  });
+  document.dispatchEvent(new Event("fullscreenchange"));
+  return Promise.resolve();
+});
 
 vi.mock("@xyflow/react", async () => {
   return {
@@ -19,25 +35,36 @@ vi.mock("@xyflow/react", async () => {
       </svg>
     ),
     Handle: () => null,
-    MarkerType: { ArrowClosed: "arrow" },
     Position: { Left: "left", Right: "right" },
-    ReactFlow: ({
+    ReactFlow: function ReactFlowMock({
       children,
       nodeTypes,
       nodes,
+      onInit,
     }: {
       children: ReactNode;
       nodeTypes: Record<string, ComponentType<{ data: unknown; id: string }>>;
       nodes: Array<{ data: unknown; id: string; type: string }>;
-    }) => (
-      <div data-testid="react-flow-mock">
-        {nodes.map((node) => {
-          const NodeComponent = nodeTypes[node.type];
-          return <NodeComponent key={node.id} data={node.data} id={node.id} />;
-        })}
-        {children}
-      </div>
-    ),
+      onInit?: (instance: {
+        fitView: typeof fitViewMock;
+        getZoom: typeof getZoomMock;
+        setCenter: typeof setCenterMock;
+      }) => void;
+    }) {
+      useEffect(() => {
+        onInit?.({ fitView: fitViewMock, getZoom: getZoomMock, setCenter: setCenterMock });
+      }, [onInit]);
+
+      return (
+        <div data-testid="react-flow-mock">
+          {nodes.map((node) => {
+            const NodeComponent = nodeTypes[node.type];
+            return <NodeComponent key={node.id} data={node.data} id={node.id} />;
+          })}
+          {children}
+        </div>
+      );
+    },
     getBezierPath: () => ["M 0 0 C 10 10, 20 20, 30 30"],
     useReactFlow: () => ({ fitView: fitViewMock, getZoom: getZoomMock, setCenter: setCenterMock }),
   };
@@ -100,7 +127,43 @@ function defaultRenameProps() {
 function defaultMindmapActions() {
   return {
     allowReorder: true,
+    detailVisible: true,
+    onCollapseAll: vi.fn(),
+    onExpandAll: vi.fn(),
     onReorderSiblings: vi.fn(),
+    onToggleDetailVisibility: vi.fn(),
+  };
+}
+
+function createProps(overrides: Partial<ComponentProps<typeof TaskMindmap>> = {}): ComponentProps<typeof TaskMindmap> {
+  const renameProps = defaultRenameProps();
+  const mindmapActions = defaultMindmapActions();
+
+  return {
+    allowReorder: mindmapActions.allowReorder,
+    collapsedTaskIds: new Set(),
+    detailVisible: mindmapActions.detailVisible,
+    editingTaskId: renameProps.editingTaskId,
+    editingTitle: renameProps.editingTitle,
+    fitViewToken: 0,
+    focusCanvasToken: 0,
+    onCollapseAll: mindmapActions.onCollapseAll,
+    onCreateChild: vi.fn(),
+    onCreateSibling: vi.fn(),
+    onDeleteTask: vi.fn(),
+    onExpandAll: mindmapActions.onExpandAll,
+    onReorderSiblings: mindmapActions.onReorderSiblings,
+    onRenameCancel: renameProps.onRenameCancel,
+    onRenameChange: renameProps.onRenameChange,
+    onRenameCommit: renameProps.onRenameCommit,
+    onRenameStart: renameProps.onRenameStart,
+    onSelectTask: vi.fn(),
+    onToggleDetailVisibility: mindmapActions.onToggleDetailVisibility,
+    onToggleCollapse: vi.fn(),
+    readOnly: false,
+    root: createRootTree(),
+    selectedTaskId: "child-1",
+    ...overrides,
   };
 }
 
@@ -109,6 +172,21 @@ describe("TaskMindmap", () => {
     fitViewMock.mockClear();
     getZoomMock.mockClear();
     setCenterMock.mockClear();
+    requestFullscreenMock.mockClear();
+    exitFullscreenMock.mockClear();
+
+    Object.defineProperty(document, "fullscreenElement", {
+      configurable: true,
+      value: null,
+    });
+    Object.defineProperty(document, "exitFullscreen", {
+      configurable: true,
+      value: exitFullscreenMock,
+    });
+    Object.defineProperty(HTMLElement.prototype, "requestFullscreen", {
+      configurable: true,
+      value: requestFullscreenMock,
+    });
   });
 
   it("uses selected node for keyboard shortcuts on the canvas", () => {
@@ -117,29 +195,16 @@ describe("TaskMindmap", () => {
     const onDeleteTask = vi.fn();
     const onSelectTask = vi.fn();
     const renameProps = defaultRenameProps();
-    const mindmapActions = defaultMindmapActions();
 
     render(
       <TaskMindmap
-        allowReorder={mindmapActions.allowReorder}
-        collapsedTaskIds={new Set()}
-        editingTaskId={renameProps.editingTaskId}
-        editingTitle={renameProps.editingTitle}
-        fitViewToken={0}
-        focusCanvasToken={0}
-        onCreateChild={onCreateChild}
-        onCreateSibling={onCreateSibling}
-        onDeleteTask={onDeleteTask}
-        onReorderSiblings={mindmapActions.onReorderSiblings}
-        onRenameCancel={renameProps.onRenameCancel}
-        onRenameChange={renameProps.onRenameChange}
-        onRenameCommit={renameProps.onRenameCommit}
-        onRenameStart={renameProps.onRenameStart}
-        onSelectTask={onSelectTask}
-        onToggleCollapse={vi.fn()}
-        readOnly={false}
-        root={createRootTree()}
-        selectedTaskId="child-1"
+        {...createProps({
+          onCreateChild,
+          onCreateSibling,
+          onDeleteTask,
+          onRenameStart: renameProps.onRenameStart,
+          onSelectTask,
+        })}
       />,
     );
 
@@ -159,32 +224,8 @@ describe("TaskMindmap", () => {
 
   it("marks the currently selected node with a strong selected state and supports mouse switching", () => {
     const onSelectTask = vi.fn();
-    const renameProps = defaultRenameProps();
-    const mindmapActions = defaultMindmapActions();
 
-    render(
-      <TaskMindmap
-        allowReorder={mindmapActions.allowReorder}
-        collapsedTaskIds={new Set()}
-        editingTaskId={renameProps.editingTaskId}
-        editingTitle={renameProps.editingTitle}
-        fitViewToken={0}
-        focusCanvasToken={0}
-        onCreateChild={vi.fn()}
-        onCreateSibling={vi.fn()}
-        onDeleteTask={vi.fn()}
-        onReorderSiblings={mindmapActions.onReorderSiblings}
-        onRenameCancel={renameProps.onRenameCancel}
-        onRenameChange={renameProps.onRenameChange}
-        onRenameCommit={renameProps.onRenameCommit}
-        onRenameStart={renameProps.onRenameStart}
-        onSelectTask={onSelectTask}
-        onToggleCollapse={vi.fn()}
-        readOnly={false}
-        root={createRootTree()}
-        selectedTaskId="child-1"
-      />,
-    );
+    render(<TaskMindmap {...createProps({ onSelectTask })} />);
 
     const selectedNode = screen.getByRole("button", { name: "子任务 A" });
     const rootNode = screen.getByRole("button", { name: "根节点" });
@@ -203,29 +244,17 @@ describe("TaskMindmap", () => {
     const onRenameChange = vi.fn();
     const onRenameCommit = vi.fn();
     const onRenameStart = vi.fn();
-    const mindmapActions = defaultMindmapActions();
 
     render(
       <TaskMindmap
-        allowReorder={mindmapActions.allowReorder}
-        collapsedTaskIds={new Set()}
-        editingTaskId="child-1"
-        editingTitle="新的标题"
-        fitViewToken={0}
-        focusCanvasToken={0}
-        onCreateChild={vi.fn()}
-        onCreateSibling={vi.fn()}
-        onDeleteTask={vi.fn()}
-        onReorderSiblings={mindmapActions.onReorderSiblings}
-        onRenameCancel={onRenameCancel}
-        onRenameChange={onRenameChange}
-        onRenameCommit={onRenameCommit}
-        onRenameStart={onRenameStart}
-        onSelectTask={vi.fn()}
-        onToggleCollapse={vi.fn()}
-        readOnly={false}
-        root={createRootTree()}
-        selectedTaskId="child-1"
+        {...createProps({
+          editingTaskId: "child-1",
+          editingTitle: "新的标题",
+          onRenameCancel,
+          onRenameChange,
+          onRenameCommit,
+          onRenameStart,
+        })}
       />,
     );
 
@@ -241,63 +270,59 @@ describe("TaskMindmap", () => {
   });
 
   it("recenters the viewport around the selected node", async () => {
-    const mindmapActions = defaultMindmapActions();
-
-    const { rerender } = render(
-      <TaskMindmap
-        allowReorder={mindmapActions.allowReorder}
-        collapsedTaskIds={new Set()}
-        editingTaskId={null}
-        editingTitle=""
-        fitViewToken={0}
-        focusCanvasToken={0}
-        onCreateChild={vi.fn()}
-        onCreateSibling={vi.fn()}
-        onDeleteTask={vi.fn()}
-        onReorderSiblings={mindmapActions.onReorderSiblings}
-        onRenameCancel={vi.fn()}
-        onRenameChange={vi.fn()}
-        onRenameCommit={vi.fn()}
-        onRenameStart={vi.fn()}
-        onSelectTask={vi.fn()}
-        onToggleCollapse={vi.fn()}
-        readOnly={false}
-        root={createRootTree()}
-        selectedTaskId="child-1"
-      />,
-    );
+    const { rerender } = render(<TaskMindmap {...createProps({ selectedTaskId: "child-1" })} />);
 
     await waitFor(() => {
       expect(setCenterMock).toHaveBeenCalled();
     });
 
-    rerender(
-      <TaskMindmap
-        allowReorder={mindmapActions.allowReorder}
-        collapsedTaskIds={new Set()}
-        editingTaskId={null}
-        editingTitle=""
-        fitViewToken={0}
-        focusCanvasToken={0}
-        onCreateChild={vi.fn()}
-        onCreateSibling={vi.fn()}
-        onDeleteTask={vi.fn()}
-        onReorderSiblings={mindmapActions.onReorderSiblings}
-        onRenameCancel={vi.fn()}
-        onRenameChange={vi.fn()}
-        onRenameCommit={vi.fn()}
-        onRenameStart={vi.fn()}
-        onSelectTask={vi.fn()}
-        onToggleCollapse={vi.fn()}
-        readOnly={false}
-        root={createRootTree()}
-        selectedTaskId="root-1"
-      />,
-    );
+    rerender(<TaskMindmap {...createProps({ selectedTaskId: "root-1" })} />);
 
     await waitFor(() => {
       expect(setCenterMock).toHaveBeenCalledTimes(2);
     });
   });
 
+  it("shows the floating toolbar and triggers toolbar actions", async () => {
+    const onExpandAll = vi.fn();
+    const onCollapseAll = vi.fn();
+    const onToggleDetailVisibility = vi.fn();
+
+    render(
+      <TaskMindmap
+        {...createProps({
+          onCollapseAll,
+          onExpandAll,
+          onToggleDetailVisibility,
+        })}
+      />,
+    );
+
+    expect(screen.getByTestId("task-mindmap-toolbar")).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "适配视图" }));
+    fireEvent.click(screen.getByRole("button", { name: "展开全部" }));
+    fireEvent.click(screen.getByRole("button", { name: "折叠全部" }));
+    fireEvent.click(screen.getByRole("button", { name: "聚焦当前节点" }));
+    fireEvent.click(screen.getByRole("button", { name: "收起详情" }));
+    fireEvent.click(screen.getByRole("button", { name: "全屏" }));
+
+    await waitFor(() => {
+      expect(fitViewMock).toHaveBeenCalled();
+      expect(setCenterMock).toHaveBeenCalled();
+      expect(requestFullscreenMock).toHaveBeenCalled();
+      expect(screen.getByRole("button", { name: "退出全屏" })).toBeInTheDocument();
+    });
+
+    expect(onExpandAll).toHaveBeenCalled();
+    expect(onCollapseAll).toHaveBeenCalled();
+    expect(onToggleDetailVisibility).toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "退出全屏" }));
+
+    await waitFor(() => {
+      expect(exitFullscreenMock).toHaveBeenCalled();
+      expect(screen.getByRole("button", { name: "全屏" })).toBeInTheDocument();
+    });
+  });
 });

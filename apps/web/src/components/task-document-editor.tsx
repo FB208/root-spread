@@ -77,15 +77,15 @@ export function TaskDocumentEditor({ accessToken, readOnly, task, userName }: Ta
           "&": {
             backgroundColor: "rgba(7, 10, 18, 0.68)",
             border: "1px solid rgba(255,255,255,0.08)",
-            borderRadius: "18px",
+            borderRadius: "14px",
             color: "rgba(244,247,255,0.94)",
-            fontSize: "14px",
-            minHeight: "220px",
+            fontSize: "13px",
+            minHeight: "180px",
           },
           ".cm-content": {
             caretColor: "#7dd3fc",
-            minHeight: "220px",
-            padding: "16px 18px",
+            minHeight: "180px",
+            padding: "12px 14px",
           },
           ".cm-cursor, .cm-dropCursor": {
             borderLeftColor: "#7dd3fc",
@@ -136,7 +136,7 @@ export function TaskDocumentEditor({ accessToken, readOnly, task, userName }: Ta
   if (!accessToken || task.id.startsWith("optimistic:")) {
     return (
       <textarea
-        className="field-input min-h-28 resize-y"
+        className="field-input min-h-24 resize-y"
         defaultValue={task.content_markdown}
         disabled
         readOnly
@@ -145,19 +145,19 @@ export function TaskDocumentEditor({ accessToken, readOnly, task, userName }: Ta
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-white/42">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-full border border-white/[0.08] px-2.5 py-1">协同编辑</span>
-          <span className="rounded-full border border-white/[0.08] px-2.5 py-1">
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-1.5 text-[11px] text-white/42">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="rounded-full border border-white/[0.08] px-2 py-0.5">协同编辑</span>
+          <span className="rounded-full border border-white/[0.08] px-2 py-0.5">
             {status === "connected" ? "已连接" : status === "connecting" ? "连接中" : "重连中"}
           </span>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
           {collaborators.map((collaborator) => (
             <span
               key={`${collaborator.name}:${collaborator.color}`}
-              className="rounded-full border border-white/[0.08] px-2.5 py-1"
+              className="rounded-full border border-white/[0.08] px-2 py-0.5"
             >
               <span className="mr-1 inline-block h-2 w-2 rounded-full align-middle" style={{ backgroundColor: collaborator.color }} />
               {collaborator.name}
