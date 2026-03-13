@@ -96,6 +96,7 @@ const ROOT_NODE_WIDTH = 212;
 const NODE_HEIGHT = 64;
 const HORIZONTAL_GAP = 226;
 const ROOT_GAP = ROOT_NODE_WIDTH - NODE_WIDTH;
+const AUTO_CENTER_DURATION_MS = 220;
 const VERTICAL_GAP = 20;
 const LAYOUT_OPTIONS = {
   horizontalGap: HORIZONTAL_GAP,
@@ -263,12 +264,18 @@ const TaskCanvasNode = memo(
       skipBlurCommitRef.current = false;
 
       const frame = window.requestAnimationFrame(() => {
-        inputRef.current?.focus();
-        inputRef.current?.select();
+        const input = inputRef.current;
+        if (!input) {
+          return;
+        }
+
+        input.focus();
+        input.setSelectionRange(0, input.value.length);
+        input.select();
       });
 
       return () => window.cancelAnimationFrame(frame);
-    }, [isEditing]);
+    }, [isEditing, task.id]);
 
     return (
       <div
@@ -423,8 +430,10 @@ function AutoFitView({ fitViewToken }: { fitViewToken: number }) {
 }
 
 function AutoCenterSelectedNode({
+  onCentered,
   selectedNode,
 }: {
+  onCentered?: (taskId: string) => void;
   selectedNode: { id: string; width: number; x: number; y: number } | null;
 }) {
   const { getZoom, setCenter } = useReactFlow();
@@ -441,16 +450,28 @@ function AutoCenterSelectedNode({
     }
 
     lastSignatureRef.current = signature;
+    let timeout: number | null = null;
 
     const frame = window.requestAnimationFrame(() => {
       void setCenter(selectedNode.x + selectedNode.width / 2 - 96, selectedNode.y + NODE_HEIGHT / 2, {
-        duration: 220,
+        duration: AUTO_CENTER_DURATION_MS,
         zoom: getZoom(),
       });
+
+      if (onCentered) {
+        timeout = window.setTimeout(() => {
+          onCentered(selectedNode.id);
+        }, AUTO_CENTER_DURATION_MS + 32);
+      }
     });
 
-    return () => window.cancelAnimationFrame(frame);
-  }, [getZoom, selectedNode, setCenter]);
+    return () => {
+      window.cancelAnimationFrame(frame);
+      if (timeout !== null) {
+        window.clearTimeout(timeout);
+      }
+    };
+  }, [getZoom, onCentered, selectedNode, setCenter]);
 
   return null;
 }
@@ -551,6 +572,34 @@ export function TaskMindmap({
   const focusCanvas = useCallback(() => {
     canvasRef.current?.focus({ preventScroll: true });
   }, []);
+
+  const focusEditingInput = useCallback(() => {
+    if (!editingTaskId || !canvasRef.current) {
+      return;
+    }
+
+    const editingInput = canvasRef.current.querySelector<HTMLInputElement>(
+      `[data-task-id="${editingTaskId}"] input`,
+    );
+    if (!editingInput) {
+      return;
+    }
+
+    editingInput.focus({ preventScroll: true });
+    editingInput.setSelectionRange(0, editingInput.value.length);
+    editingInput.select();
+  }, [editingTaskId]);
+
+  const handleCenteredSelection = useCallback(
+    (taskId: string) => {
+      if (editingTaskId !== taskId) {
+        return;
+      }
+
+      focusEditingInput();
+    },
+    [editingTaskId, focusEditingInput],
+  );
 
   const handleNodeRenameCancel = useCallback(() => {
     handlersRef.current.onRenameCancel();
@@ -707,6 +756,27 @@ export function TaskMindmap({
 
     return () => window.cancelAnimationFrame(frame);
   }, [editingTaskId, focusCanvas, focusCanvasToken]);
+
+  useEffect(() => {
+    if (!editingTaskId) {
+      return;
+    }
+
+    let firstFrame = 0;
+    let secondFrame = 0;
+
+    firstFrame = window.requestAnimationFrame(() => {
+      focusEditingInput();
+      secondFrame = window.requestAnimationFrame(() => {
+        focusEditingInput();
+      });
+    });
+
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      window.cancelAnimationFrame(secondFrame);
+    };
+  }, [editingTaskId, focusEditingInput, layout.nodes.length, selectedTaskId]);
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
@@ -949,7 +1019,7 @@ export function TaskMindmap({
       >
         <Background color="rgba(142, 163, 210, 0.12)" gap={22} size={1} variant={BackgroundVariant.Dots} />
         <AutoFitView fitViewToken={fitViewToken} />
-        <AutoCenterSelectedNode selectedNode={selectedLayoutNode} />
+        <AutoCenterSelectedNode onCentered={handleCenteredSelection} selectedNode={selectedLayoutNode} />
       </ReactFlow>
     </div>
   );

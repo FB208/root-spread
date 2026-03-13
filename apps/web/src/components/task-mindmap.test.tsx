@@ -289,7 +289,39 @@ describe("TaskMindmap", () => {
       expect(editingInput).toHaveFocus();
     });
 
+    expect(editingInput.selectionStart).toBe(0);
+    expect(editingInput.selectionEnd).toBe("新节点".length);
+
     expect(onRenameCommit).not.toHaveBeenCalled();
+  });
+
+  it("restores title focus after the selected-node recenter animation finishes", async () => {
+    render(
+      <TaskMindmap
+        {...createProps({
+          editingTaskId: "child-1",
+          editingTitle: "新节点",
+          selectedTaskId: "child-1",
+        })}
+      />,
+    );
+
+    const editingInput = screen.getByDisplayValue("新节点");
+    const canvas = screen.getByTestId("task-mindmap-canvas");
+
+    await waitFor(() => {
+      expect(setCenterMock).toHaveBeenCalled();
+    });
+
+    canvas.focus();
+    expect(canvas).toHaveFocus();
+
+    await waitFor(
+      () => {
+        expect(editingInput).toHaveFocus();
+      },
+      { timeout: 500 },
+    );
   });
 
   it("recenters the viewport around the selected node", async () => {

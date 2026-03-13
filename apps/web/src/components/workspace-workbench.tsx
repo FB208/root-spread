@@ -129,6 +129,7 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
   const [tableViewportHeight, setTableViewportHeight] = useState(TABLE_VIEWPORT_FALLBACK);
   const [treeFitViewToken, setTreeFitViewToken] = useState(0);
   const [canvasFocusToken, setCanvasFocusToken] = useState(0);
+  const hasAutoFitLiveTreeRef = useRef(false);
   const tableViewportRef = useRef<HTMLDivElement | null>(null);
   const treeFullscreenRef = useRef<HTMLDivElement | null>(null);
   const detailFocusToken = 0;
@@ -308,7 +309,18 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
   }, [isHistoryView, loadHistoryWorkbench]);
 
   useEffect(() => {
-    if (!isHistoryView && liveRootTask) {
+    if (isHistoryView) {
+      hasAutoFitLiveTreeRef.current = false;
+      return;
+    }
+
+    if (!liveRootTask) {
+      hasAutoFitLiveTreeRef.current = false;
+      return;
+    }
+
+    if (!hasAutoFitLiveTreeRef.current) {
+      hasAutoFitLiveTreeRef.current = true;
       setTreeFitViewToken((current) => current + 1);
     }
   }, [isHistoryView, liveRootTask]);
@@ -356,6 +368,10 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
       return;
     }
 
+    if (selectedTaskId?.startsWith("tmp:") && !visibleTaskIdSet.has(selectedTaskId)) {
+      return;
+    }
+
     if (!selectedTaskId || !visibleTaskIdSet.has(selectedTaskId)) {
       setSelectedTaskId(visibleTaskIds[0] ?? null);
       focusCanvas();
@@ -364,6 +380,10 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
 
   useEffect(() => {
     if (editingTaskId && !taskIndex.has(editingTaskId)) {
+      if (editingTaskId.startsWith("tmp:")) {
+        return;
+      }
+
       setEditingTaskId(null);
       setEditingTitle("");
     }
@@ -432,7 +452,6 @@ export function WorkspaceWorkbench({ workspaceId }: WorkspaceWorkbenchProps) {
           setSelectedTaskId(createdTaskId);
           setEditingTaskId(createdTaskId);
           setEditingTitle("新节点");
-          focusCanvas();
         }
       } catch (submitError) {
         setSelectedTaskId(parentId);

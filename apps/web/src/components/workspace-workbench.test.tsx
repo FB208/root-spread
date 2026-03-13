@@ -39,17 +39,31 @@ vi.mock("@/components/task-detail-panel", () => ({
 vi.mock("@/components/task-mindmap", () => ({
   TaskMindmap: ({
     detailVisible,
+    editingTaskId,
+    selectedTaskId,
+    fitViewToken,
+    onCreateChild,
     onCollapseAll,
     onExpandAll,
     onToggleDetailVisibility,
   }: {
     detailVisible: boolean;
+    editingTaskId: string | null;
+    fitViewToken: number;
+    onCreateChild: (taskId: string) => void;
     onCollapseAll: () => void;
     onExpandAll: () => void;
+    selectedTaskId: string | null;
     onToggleDetailVisibility: () => void;
   }) => (
     <div data-testid="task-mindmap">
       <span>{detailVisible ? "详情已显示" : "详情已隐藏"}</span>
+      <span data-testid="selected-task-id">{selectedTaskId ?? ""}</span>
+      <span data-testid="editing-task-id">{editingTaskId ?? ""}</span>
+      <span data-testid="fit-view-token">{fitViewToken}</span>
+      <button onClick={() => onCreateChild("root-1")} type="button">
+        创建子节点
+      </button>
       <button onClick={onExpandAll} type="button">
         展开全部
       </button>
@@ -68,6 +82,8 @@ vi.mock("@/lib/task-sync", () => ({
 }));
 
 const mockedUseTaskSync = vi.mocked(useTaskSync);
+let currentRootTask = createRoot(Array.from({ length: 50 }, (_, index) => createTask(index)));
+const createTaskMock = vi.fn().mockResolvedValue(null);
 
 function createTask(index: number) {
   return {
@@ -130,11 +146,14 @@ function createRoot(children: ReturnType<typeof createTask>[]) {
 describe("WorkspaceWorkbench", () => {
   beforeEach(() => {
     mockedUseTaskSync.mockReset();
-    mockedUseTaskSync.mockReturnValue({
+    currentRootTask = createRoot(Array.from({ length: 50 }, (_, index) => createTask(index)));
+    createTaskMock.mockReset();
+    createTaskMock.mockResolvedValue(null);
+    mockedUseTaskSync.mockImplementation(() => ({
       bulkDeleteTasks: vi.fn().mockResolvedValue(undefined),
       bulkSetStatus: vi.fn().mockResolvedValue(undefined),
       connected: true,
-      createTask: vi.fn().mockResolvedValue(null),
+      createTask: createTaskMock,
       discardTaskChanges: vi.fn().mockResolvedValue(undefined),
       deleteTask: vi.fn().mockResolvedValue(undefined),
       error: null,
@@ -144,10 +163,10 @@ describe("WorkspaceWorkbench", () => {
       refresh: vi.fn().mockResolvedValue(undefined),
       reorderTasks: vi.fn().mockResolvedValue(undefined),
       retryTaskSync: vi.fn().mockResolvedValue(undefined),
-      rootTask: createRoot(Array.from({ length: 50 }, (_, index) => createTask(index))),
+      rootTask: currentRootTask,
       setTaskStatus: vi.fn().mockResolvedValue(undefined),
       syncSeq: 1,
-    });
+    }));
   });
 
   it("virtualizes large task tables and updates rendered rows on scroll", async () => {
@@ -190,5 +209,38 @@ describe("WorkspaceWorkbench", () => {
 
     expect(screen.getByTestId("task-detail-panel")).toBeInTheDocument();
     expect(screen.getByText("详情已显示")).toBeInTheDocument();
+  });
+
+  it("does not auto fit again when the live tree updates after creating nodes", async () => {
+    const { rerender } = render(<WorkspaceWorkbench workspaceId="ws-1" />);
+
+    expect(screen.getByTestId("fit-view-token")).toHaveTextContent("1");
+
+    currentRootTask = createRoot([
+      createTask(0),
+      {
+        ...createTask(99),
+        id: "tmp:new-task",
+        path: "root-1/tmp:new-task",
+        title: "新节点",
+      },
+      ...Array.from({ length: 49 }, (_, index) => createTask(index + 1)),
+    ]);
+
+    rerender(<WorkspaceWorkbench workspaceId="ws-1" />);
+
+    expect(screen.getByTestId("fit-view-token")).toHaveTextContent("1");
+  });
+
+  it("keeps the temporary node selected and editing before the optimistic tree catches up", async () => {
+    createTaskMock.mockResolvedValue("tmp:new-task");
+
+    render(<WorkspaceWorkbench workspaceId="ws-1" />);
+
+    await userEvent.click(screen.getByRole("button", { name: "创建子节点" }));
+
+    expect(createTaskMock).toHaveBeenCalledWith("root-1", "新节点");
+    expect(screen.getByTestId("selected-task-id")).toHaveTextContent("tmp:new-task");
+    expect(screen.getByTestId("editing-task-id")).toHaveTextContent("tmp:new-task");
   });
 });
